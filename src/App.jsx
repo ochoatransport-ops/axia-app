@@ -1,6 +1,97 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { storage } from './firebase';
 
+
+const C = {
+  bg:"#f4f4f5", surface:"#ffffff", card:"#ffffff",
+  border:"#e4e4e7", border2:"#d4d4d8",
+  accent:"#18181b", accent2:"#27272a", accent3:"#52525b",
+  text:"#09090b", textMid:"#3f3f46", textDim:"#9ca3af",
+  green:"#16a34a", yellow:"#d97706", red:"#dc2626", blue:"#2563eb",
+};
+
+const CLIENTES_INIT = [];
+const PROVEEDORES_INIT = [];
+const VENDEDORES_INIT = [];
+const PEDIDOS_INIT = [];
+
+const ABONOS_PROV_INIT = [];
+const ABONOS_CLI_INIT = [];
+const STATUS_OPTS = ["","PAGADO","PAGADO TRANSFERENCIA","PENDIENTE","ABONO PARCIAL"];
+const TABS = ["📦 Pedidos","🏭 Proveedores","👥 Clientes","📊 Resumen","💵 Flujo de Efectivo","🏪 Bodega"];
+const gColor=v=>v>0?"#16a34a":v<0?"#dc2626":"#9ca3af";
+const sColor=v=>v>0?"#dc2626":v<0?"#16a34a":"#9ca3af";
+const fmt = v => new Intl.NumberFormat("es-MX",{style:"currency",currency:"USD",minimumFractionDigits:2,maximumFractionDigits:2}).format(v||0);
+
+const inp = {
+  width:"100%", background:"#f9f9f9", border:`1px solid ${C.border2}`,
+  borderRadius:8, padding:"9px 12px", color:C.text, fontSize:14,
+  fontFamily:"'DM Sans',sans-serif", outline:"none", boxSizing:"border-box"
+};
+const btnP = {
+  background:`linear-gradient(135deg,${C.accent},${C.accent3})`,
+  border:"none", borderRadius:9, color:"#fff",
+  fontFamily:"'DM Sans',sans-serif", fontWeight:600, cursor:"pointer"
+};
+
+const sstyle = s => {
+  if (!s) return {bg:"#f1f1f1",c:"#aaaaaa",label:"—"};
+  if (s==="N/A") return {bg:"#e0e7ff",c:"#4338ca",label:"N/A"};
+  if (s.includes("PAGADO")) return {bg:"#dcfce7",c:"#15803d",label:s};
+  if (s==="ABONO PARCIAL") return {bg:"#fef9c3",c:"#a16207",label:s};
+  if (s==="PENDIENTE") return {bg:"#fee2e2",c:"#b91c1c",label:s};
+  return {bg:"#f1f1f1",c:"#555555",label:s};
+};
+
+function exportCSV(pedidos,abonosProv,abonosCli) {
+  const esc = v=>`"${String(v??'').replace(/"/g,'""')}"`;
+  const rows=[
+    ["AXIA Distribution & Supply — Reporte"],
+    [`Generado: ${new Date().toLocaleString("es-MX")}`],[""],
+    ["#","VENDEDOR","PROVEEDOR","CLIENTE","MERCANCÍA","CANTIDAD","COSTO UNIT","COSTO TOTAL","PRECIO VENTA","TOTAL VENTA","GANANCIA","CLIENTE PAGÓ","YO RECIBÍ","PAGUÉ PROVEEDOR"],
+    ...pedidos.map(p=>{const ct=p.costo+(p.otroCosto||0);return[p.id,p.vendedor||"—",p.proveedor,p.cliente,p.mercancia,p.cant,p.unitario,ct,p.precioPublico,p.total,(p.total-ct),p.clientePago||"—",p.recibido||"—",p.pagadoProveedor||"—"];}),
+    [""],["ABONOS A PROVEEDORES"],["PROVEEDOR","FECHA","MONTO","NOTA"],
+    ...abonosProv.map(a=>[a.proveedor,a.fecha,a.monto,a.nota]),
+    [""],["PAGOS DE CLIENTES"],["CLIENTE","FECHA","MONTO","NOTA"],
+    ...abonosCli.map(a=>[a.cliente,a.fecha,a.monto,a.nota]),
+  ];
+  const blob=new Blob(["\uFEFF"+rows.map(r=>r.map(esc).join(",")).join("\n")],{type:"text/csv;charset=utf-8;"});
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(blob);
+  a.download=`AXIA_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+}
+
+// ── Shared mini-modal for adding a single name (proveedor, cliente, vendedor) ──
+function AddNombreModal({title, placeholder, onSave, onClose}){
+  const [val,setVal]=useState("");
+  return(
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(4px)"}}>
+      <div style={{background:"#fff",borderRadius:16,width:"min(420px,92vw)",padding:28,boxShadow:"0 20px 60px rgba(0,0,0,0.4)"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
+          <h3 style={{margin:0,fontFamily:"'Sora',sans-serif",fontSize:17,color:C.text}}>{title}</h3>
+          <button onClick={onClose} style={{background:"none",border:"none",fontSize:22,cursor:"pointer",color:C.textDim,lineHeight:1}}>✕</button>
+        </div>
+        <input
+          value={val}
+          onChange={e=>setVal(e.target.value.toUpperCase())}
+          placeholder={placeholder}
+          autoFocus
+          style={{...inp,marginBottom:16}}
+          onKeyDown={e=>{ if(e.key==="Enter" && val.trim()) { onSave(val.trim()); }}}
+        />
+        <div style={{display:"flex",gap:10}}>
+          <button onClick={onClose} style={{flex:1,padding:"10px 0",background:"transparent",border:`1px solid ${C.border2}`,borderRadius:9,color:C.textDim,fontFamily:"'DM Sans',sans-serif",cursor:"pointer",fontSize:14}}>Cancelar</button>
+          <button
+            onClick={()=>{ if(val.trim()) onSave(val.trim()); }}
+            style={{...btnP,flex:2,padding:"10px 0",fontSize:14}}
+          >Agregar</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Modal({title,onClose,children}){
   return(
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(3px)"}}>
@@ -58,6 +149,7 @@ function Combo({value,onChange,options,placeholder}){
 }
 
 // ── MAIN ──────────────────────────────────────────────────────────────────────
+
 function DistribuirPagosModal({nombre,pedidos,abonosCli,setPedidos,onClose,fmt,C,inp,btnP}){
   // Load existing assignments from pedidos (montoAsignado field)
   const init=()=>{
