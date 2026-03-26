@@ -1,7 +1,63 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { storage } from './firebase';
 
+function Modal({title,onClose,children}){
+  return(
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(3px)"}}>
+      <div style={{background:"#fff",border:`1px solid ${C.border2}`,borderRadius:16,width:"min(580px,95vw)",maxHeight:"92vh",overflowY:"auto",padding:28,boxShadow:"0 20px 60px rgba(0,0,0,0.3)"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
+          <h3 style={{color:C.text,fontFamily:"'Sora',sans-serif",margin:0,fontSize:18}}>{title}</h3>
+          <button onClick={onClose} style={{background:"none",border:"none",color:C.textDim,fontSize:22,cursor:"pointer",lineHeight:1}}>✕</button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
 
+function Field({label,children}){
+  return(
+    <div style={{marginBottom:13}}>
+      <label style={{display:"block",color:C.textDim,fontSize:11,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:4,fontFamily:"'DM Sans',sans-serif"}}>{label}</label>
+      {children}
+    </div>
+  );
+}
+function Combo({value,onChange,options,placeholder}){
+  const [q,setQ]=React.useState("");
+  const [open,setOpen]=React.useState(false);
+  const ref=React.useRef();
+  React.useEffect(()=>{
+    const fn=e=>{if(ref.current&&!ref.current.contains(e.target))setOpen(false);};
+    document.addEventListener("mousedown",fn);
+    return()=>document.removeEventListener("mousedown",fn);
+  },[]);
+  const filtered=options.filter(o=>o.toLowerCase().includes(q.toLowerCase()));
+  return(
+    <div ref={ref} style={{position:"relative"}}>
+      <input
+        value={open?q:(value||"")}
+        onChange={e=>{setQ(e.target.value);setOpen(true);}}
+        onFocus={()=>{setQ("");setOpen(true);}}
+        placeholder={placeholder||"Buscar…"}
+        style={{...inp,width:"100%",boxSizing:"border-box"}}
+      />
+      {open&&filtered.length>0&&(
+        <div style={{position:"absolute",top:"100%",left:0,right:0,background:"#fff",border:`1px solid ${C.border}`,borderRadius:8,boxShadow:"0 4px 16px rgba(0,0,0,0.12)",zIndex:9999,maxHeight:180,overflowY:"auto"}}>
+          {filtered.map(o=>(
+            <div key={o} onMouseDown={()=>{onChange(o);setQ("");setOpen(false);}}
+              style={{padding:"8px 12px",cursor:"pointer",fontSize:13,color:C.text,background:o===value?"#f4f4f5":"#fff"}}
+              onMouseEnter={e=>e.currentTarget.style.background="#f4f4f5"}
+              onMouseLeave={e=>e.currentTarget.style.background=o===value?"#f4f4f5":"#fff"}
+            >{o}</div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── MAIN ──────────────────────────────────────────────────────────────────────
 function DistribuirPagosModal({nombre,pedidos,abonosCli,setPedidos,onClose,fmt,C,inp,btnP}){
   // Load existing assignments from pedidos (montoAsignado field)
   const init=()=>{
@@ -432,7 +488,6 @@ function EstadoCuentaModal({nombre,pedidos,abonosCli,flujo,onClose,fmt,C,inp,btn
     </div>
   );
 }
-
 
 
 
@@ -1568,6 +1623,5 @@ export default function App(){
     </div>
   );
 }
-
 
 
