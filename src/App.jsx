@@ -406,6 +406,7 @@ function EstadoCuentaModal({nombre,pedidos,abonosCli,flujo,onClose,fmt,C,inp,btn
   .footer{margin-top:48px;padding-top:16px;border-top:1px solid #e2e8f0;display:flex;justify-content:space-between;font-size:11px;color:#94a3b8}
   @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
 </style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head><body><div class="page">
 
 
@@ -594,6 +595,34 @@ function EstadoCuentaModal({nombre,pedidos,abonosCli,flujo,onClose,fmt,C,inp,btn
           {misPedidos.length===0&&misAbonos.length===0&&(
             <div style={{textAlign:"center",padding:"40px 0",color:"#a1a1aa"}}>Sin movimientos registrados</div>
           )}
+
+          {/* Excel export */}
+          <div style={{padding:"16px 0 0",borderTop:"1px solid #f5f5f4",marginTop:16}}>
+            <button onClick={()=>{
+              const wb=XLSX.utils.book_new();
+              const ws=XLSX.utils.aoa_to_sheet([
+                [`Estado de Cuenta — ${nombre}`,"","","","",""],
+                ["Fecha:",new Date().toLocaleDateString("es-MX"),"","","",""],
+                ["","","","","",""],
+                ["RESUMEN","","","","",""],
+                ["Total pedidos",totalPedidos,"","Total abonado",totalAbonado,""],
+                ["Saldo pendiente",saldo,"","","",""],
+                ["","","","","",""],
+                ["PEDIDOS","","","","",""],
+                ["Folio","Mercancía","Cantidad","Precio Unit.","Total","Estado"],
+                ...misPedidos.map(p=>[p.id,p.mercancia,p.cant,p.precioPublico||0,p.total||0,p.clientePago||"Pendiente"]),
+                ["","","","TOTAL",totalPedidos,""],
+                ["","","","","",""],
+                ["PAGOS RECIBIDOS","","","","",""],
+                ["Fecha","Nota","Monto","","",""],
+                ...misAbonos.map(a=>[a.fecha,a.nota||"",a.monto,"","",""]),
+                ["TOTAL ABONADO","","",totalAbonado,"",""],
+              ]);
+              ws['!cols']=[{wch:12},{wch:35},{wch:10},{wch:14},{wch:14},{wch:22}];
+              XLSX.utils.book_append_sheet(wb,ws,"Estado de Cuenta");
+              XLSX.writeFile(wb,`Estado_Cliente_${nombre.replace(/\s+/g,"_")}_${new Date().toISOString().slice(0,10)}.xlsx`);
+            }} style={{width:"100%",padding:"10px 0",background:"#16a34a",border:"none",borderRadius:10,color:"#fff",cursor:"pointer",fontWeight:600,fontFamily:"'Outfit',sans-serif",fontSize:13}}>📊 Exportar Excel</button>
+          </div>
         </div>
       </div>
     </div>
@@ -655,7 +684,8 @@ function EstadoCuentaProveedorModal({nombre,pedidos,abonosProv,onClose,fmt,C,inp
       th{font-size:10px;font-weight:700;color:#a8a29e;text-transform:uppercase;letter-spacing:.06em;padding:8px;border-bottom:2px solid #e7e5e4;text-align:left}
       td{padding:8px;border-bottom:1px solid #f5f5f4;font-size:12px}
       h2{font-size:13px;font-weight:700;color:#a8a29e;text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px}
-    </style></head><body>
+    </style><script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+</head><body>
       <h1>${nombre}</h1>
       <div style="color:#a8a29e;font-size:12px;margin-top:4px">Estado de cuenta proveedor · ${periodoLabel} · ${fechaDoc}</div>
       <div class="hero">
@@ -765,6 +795,37 @@ function EstadoCuentaProveedorModal({nombre,pedidos,abonosProv,onClose,fmt,C,inp
       {/* Actions */}
       <div style={{display:"flex",gap:10,marginTop:20,paddingTop:16,borderTop:"1px solid #f5f5f4"}}>
         <button onClick={descargarPDF} style={{...btnP,flex:1}}>🖨️ Imprimir / PDF</button>
+        <button onClick={()=>{
+          const wb=XLSX.utils.book_new();
+          // Resumen sheet
+          const resumen=[
+            ["Estado de Cuenta Proveedor","",""],
+            ["Proveedor:",nombre,""],
+            ["Fecha:",new Date().toLocaleDateString("es-MX"),""],
+            ["","",""],
+            ["RESUMEN","",""],
+            ["Total Comprado",totalComprado,""],
+            ["Total Abonado",totalAbonado,""],
+            ["Saldo Pendiente",saldo,""],
+            ["","",""],
+          ];
+          const wsPedidos=XLSX.utils.aoa_to_sheet([
+            ...resumen,
+            ["PEDIDOS","","","",""],
+            ["Fecha","Mercancía","Cantidad","Costo Total","Estado Cliente"],
+            ...misPedidos.map(p=>[p.fecha,p.mercancia,p.cant,p.costo+(p.otroCosto||0),p.clientePago||"Pendiente"]),
+            ["","","","",""],
+            ["TOTAL","",misPedidos.reduce((s,p)=>s+p.cant,0),totalComprado,""],
+            ["","","","",""],
+            ["PAGOS REALIZADOS","","","",""],
+            ["Fecha","Nota","Monto","",""],
+            ...misAbonos.map(a=>[a.fecha,a.nota||"",a.monto,"",""]),
+            ["TOTAL ABONADO","","",totalAbonado,""],
+          ]);
+          wsPedidos['!cols']=[{wch:14},{wch:35},{wch:10},{wch:15},{wch:20}];
+          XLSX.utils.book_append_sheet(wb,wsPedidos,"Estado de Cuenta");
+          XLSX.writeFile(wb,`Estado_Proveedor_${nombre.replace(/\s+/g,"_")}_${new Date().toISOString().slice(0,10)}.xlsx`);
+        }} style={{flex:1,padding:"10px 0",background:"#16a34a",border:"none",borderRadius:10,color:"#fff",cursor:"pointer",fontWeight:600,fontFamily:"'Outfit',sans-serif"}}>📊 Exportar Excel</button>
         <button onClick={onClose} style={{flex:1,padding:"10px 0",background:"#f5f5f4",border:"1px solid #e7e5e4",borderRadius:10,color:"#44403c",cursor:"pointer",fontFamily:"'Outfit',sans-serif",fontWeight:500}}>Cerrar</button>
       </div>
     </Modal>
@@ -1494,7 +1555,7 @@ function Axia(){
                 <option value="disponible">Mayor disponible</option>
               </select>
             </div>
-            <button onClick={()=>{setBForm({fecha:new Date().toISOString().slice(0,10),proveedor:proveedores[0]?.nombre||""});setModalBodega("new");}} style={{...btnP,padding:"9px 20px",fontSize:13,flexShrink:0}}>+ Nueva entrada</button>
+            <button onClick={()=>{setBForm({fecha:new Date().toISOString().slice(0,10),proveedor:""});setModalBodega("new");}} style={{...btnP,padding:"9px 20px",fontSize:13,flexShrink:0}}>+ Nueva entrada</button>
           </div>
 
           {/* Cards */}
@@ -1973,12 +2034,20 @@ function Axia(){
       <button onClick={()=>{setModalBodega(null);setBForm({});}} style={{flex:1,padding:"10px 0",background:"transparent",border:`1px solid ${C.border2}`,borderRadius:9,color:C.textDim,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>Cancelar</button>
       <button onClick={()=>{
         const cant=Number(bForm.cant)||0,unitario=Number(bForm.unitario)||0;
-        if(!bForm.mercancia||!cant||!bForm.proveedor)return;
+        if(!bForm.mercancia||!cant||!bForm.proveedor){alert('Selecciona un proveedor');return;}
         const fecha=bForm.fecha||new Date().toISOString().slice(0,10);
         if(bForm._editId){
           const existing=bodega.find(b=>b.id===bForm._editId);
           const pendientes=cant-(existing.distribuciones||[]).reduce((s,d)=>s+d.cant,0);
           setBodega(p=>p.map(b=>b.id===bForm._editId?{...b,fecha,proveedor:bForm.proveedor,mercancia:bForm.mercancia,cant,unitario,costoTotal:cant*unitario,notas:bForm.notas||""}:b));
+          // Update proveedor on ALL pedidos related to this bodega item (distributed + pending)
+          const distPedIds=(existing.distribuciones||[]).map(d=>d.pedidoId);
+          setPedidos(p=>p.map(x=>{
+            if(x.bodegaId===bForm._editId){
+              return {...x,proveedor:bForm.proveedor,mercancia:bForm.mercancia,unitario,fecha};
+            }
+            return x;
+          }));
           if(existing.pedidoProvId){
             if(pendientes<=0){setPedidos(p=>p.filter(x=>x.id!==existing.pedidoProvId));}
             else{setPedidos(p=>p.map(x=>x.id===existing.pedidoProvId?{...x,cant:pendientes,unitario,costo:pendientes*unitario,mercancia:bForm.mercancia,proveedor:bForm.proveedor,fecha}:x));}
