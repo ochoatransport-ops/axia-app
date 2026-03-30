@@ -598,70 +598,135 @@ function EstadoCuentaModal({nombre,pedidos,abonosCli,flujo,onClose,fmt,C,inp,btn
           {/* Excel export */}
           <div style={{padding:"16px 0 0",borderTop:"1px solid #f5f5f4",marginTop:16}}>
             <button onClick={async()=>{
-              const XLSX=await loadXLSX();
-              const wb=XLSX.utils.book_new();
+              const EJS=await loadExcelJS();
+              const wb=new EJS.Workbook();
               const fecha=new Date().toLocaleDateString("es-MX");
+              const DARK="1C1917",GREEN="16A34A",RED="DC2626",ORANGE="D97706",BLUE="2563EB",LGRAY="F5F5F4",WHITE="FFFFFF";
+              const hF=(bold=true,color=WHITE,sz=11)=>({name:"Arial",bold,color:{argb:"FF"+color},size:sz});
+              const fill=t=>({type:"pattern",pattern:"solid",fgColor:{argb:"FF"+t}});
+              const bdr=()=>({top:{style:"thin",color:{argb:"FFE7E5E4"}},left:{style:"thin",color:{argb:"FFE7E5E4"}},bottom:{style:"thin",color:{argb:"FFE7E5E4"}},right:{style:"thin",color:{argb:"FFE7E5E4"}}});
+              const thk=()=>({top:{style:"medium",color:{argb:"FF1C1917"}},left:{style:"medium",color:{argb:"FF1C1917"}},bottom:{style:"medium",color:{argb:"FF1C1917"}},right:{style:"medium",color:{argb:"FF1C1917"}}});
               const pendientesPed=misPedidos.filter(p=>p.clientePago!=="PAGADO"&&p.clientePago!=="PAGADO TRANSFERENCIA");
               const pagadosPed=misPedidos.filter(p=>p.clientePago==="PAGADO"||p.clientePago==="PAGADO TRANSFERENCIA");
               const totalPend=pendientesPed.reduce((s,p)=>s+(p.total||0),0);
+              const money='"$"#,##0.00';
 
-              // ── Hoja 1: Resumen simple ──
-              const sheet1=[
-                [`ESTADO DE CUENTA — CLIENTE: ${nombre}`],
-                [`Fecha: ${fecha}`],
-                [],
-                ["RESUMEN"],
-                ["Total Vendido","Total Recibido","Saldo Pendiente"],
-                [totalPedidos,totalAbonado,saldo],
-                [],
-                ["PEDIDOS"],
-                ["Folio","Mercancía","Cantidad","Precio Unit.","Total","Estado"],
-                ...misPedidos.map(p=>["#"+p.id,p.mercancia,p.cant,p.precioPublico||0,p.total||0,p.clientePago||"Pendiente"]),
-                ["TOTAL","","","",totalPedidos,""],
-                [],
-                ["PAGOS RECIBIDOS"],
-                ["Fecha","Nota","Monto"],
-                ...misAbonos.map(a=>[a.fecha,a.nota||"—",a.monto]),
-                ["TOTAL RECIBIDO","",totalAbonado],
-              ];
-              const ws1=XLSX.utils.aoa_to_sheet(sheet1);
-              ws1['!cols']=[{wch:12},{wch:35},{wch:10},{wch:14},{wch:14},{wch:22}];
-              XLSX.utils.book_append_sheet(wb,ws1,"Resumen");
+              const addSectionHeader=(ws,label,cols)=>{
+                const r=ws.rowCount+1;
+                ws.addRow([label]);
+                ws.mergeCells(`A${r}:${cols}${r}`);
+                ws.getCell(`A${r}`).font=hF(true,WHITE,11);ws.getCell(`A${r}`).fill=fill(DARK);
+                ws.getCell(`A${r}`).alignment={horizontal:"center"};ws.getRow(r).height=20;
+              };
 
-              // ── Hoja 2: Desglose detallado ──
-              const sheet2=[
-                [`DESGLOSE DETALLADO — ${nombre}`],
-                [`Fecha: ${fecha}`],
-                [],
-                ["RESUMEN"],
-                ["Total Vendido","Total Recibido","Saldo Pendiente","Pedidos totales","Pagados","Pendientes"],
-                [totalPedidos,totalAbonado,saldo,misPedidos.length,pagadosPed.length,pendientesPed.length],
-                [],
-                ["PEDIDOS PENDIENTES DE PAGO"],
-                ["Folio","Mercancía","Proveedor","Cant.","Precio Unit.","Total","Abonado","Resta","Estado"],
-                ...pendientesPed.map(p=>{
-                  const asig=p.montoAsignado||0;
-                  return ["#"+p.id,p.mercancia,p.proveedor,p.cant,p.precioPublico||0,p.total||0,asig,(p.total||0)-asig,p.clientePago||"Pendiente"];
-                }),
-                ["TOTAL PENDIENTE","","","","",totalPend,"","",""],
-                [],
-                ["PEDIDOS PAGADOS"],
-                ["Folio","Mercancía","Proveedor","Cant.","Precio Unit.","Total","Estado"],
-                ...pagadosPed.map(p=>["#"+p.id,p.mercancia,p.proveedor,p.cant,p.precioPublico||0,p.total||0,p.clientePago]),
-                ["TOTAL PAGADO","","","","",pagadosPed.reduce((s,p)=>s+(p.total||0),0),""],
-                [],
-                ["PAGOS RECIBIDOS"],
-                ["Fecha","Nota","Monto"],
-                ...misAbonos.map(a=>[a.fecha,a.nota||"—",a.monto]),
-                ["TOTAL RECIBIDO","",totalAbonado],
-                [],
-                ["SALDO PENDIENTE","",saldo],
-              ];
-              const ws2=XLSX.utils.aoa_to_sheet(sheet2);
-              ws2['!cols']=[{wch:12},{wch:35},{wch:25},{wch:10},{wch:14},{wch:14},{wch:14},{wch:14},{wch:22}];
-              XLSX.utils.book_append_sheet(wb,ws2,"Desglose Detallado");
+              // ══ HOJA 1: RESUMEN ══
+              const ws1=wb.addWorksheet("Resumen");
+              ws1.columns=[{width:14},{width:36},{width:14},{width:14},{width:14},{width:22}];
+              ws1.mergeCells("A1:F1");
+              ws1.getCell("A1").value=`ESTADO DE CUENTA — ${nombre.toUpperCase()}`;
+              ws1.getCell("A1").font=hF(true,WHITE,13);ws1.getCell("A1").fill=fill(DARK);
+              ws1.getCell("A1").alignment={horizontal:"center",vertical:"middle"};ws1.getCell("A1").border=thk();ws1.getRow(1).height=26;
+              ws1.mergeCells("A2:F2");ws1.getCell("A2").value=`Fecha: ${fecha}`;
+              ws1.getCell("A2").font={name:"Arial",italic:true,color:{argb:"FF78716C"},size:10};ws1.getCell("A2").fill=fill(LGRAY);ws1.getCell("A2").alignment={horizontal:"center"};
+              ws1.addRow([]);
 
-              XLSX.writeFile(wb,`Estado_Cliente_${nombre.replace(/\s+/g,"_")}_${new Date().toISOString().slice(0,10)}.xlsx`);
+              // KPIs
+              ["A4:B4","C4:D4","E4:F4"].forEach((r,i)=>{ws1.mergeCells(r);});
+              ws1.getCell("A4").value="TOTAL VENDIDO";ws1.getCell("C4").value="TOTAL RECIBIDO";ws1.getCell("E4").value=saldo>0?"SALDO PENDIENTE":"AL CORRIENTE";
+              [["A4",ORANGE],["C4",GREEN],["E4",saldo>0?RED:GREEN]].forEach(([c,col])=>{ws1.getCell(c).font=hF(true,WHITE,10);ws1.getCell(c).fill=fill(col);ws1.getCell(c).alignment={horizontal:"center"};ws1.getCell(c).border=thk();});
+              ws1.getRow(4).height=20;
+              ["A5:B5","C5:D5","E5:F5"].forEach(r=>ws1.mergeCells(r));
+              ws1.getCell("A5").value=totalPedidos;ws1.getCell("C5").value=totalAbonado;ws1.getCell("E5").value=Math.abs(saldo);
+              [["A5",ORANGE],["C5",GREEN],["E5",saldo>0?RED:GREEN]].forEach(([c,col])=>{ws1.getCell(c).numFmt=money;ws1.getCell(c).font=hF(true,col,13);ws1.getCell(c).alignment={horizontal:"center"};ws1.getCell(c).border=bdr();});
+              ws1.getRow(5).height=24;ws1.addRow([]);
+
+              addSectionHeader(ws1,"PEDIDOS","F");
+              const ph1=ws1.addRow(["Folio","Mercancía","Cantidad","Precio Unit.","Total","Estado"]);
+              ph1.eachCell(c=>{c.font=hF(true,WHITE,9);c.fill=fill("44403C");c.alignment={horizontal:"center"};c.border=bdr();});
+              misPedidos.forEach(p=>{
+                const isPag=p.clientePago==="PAGADO"||p.clientePago==="PAGADO TRANSFERENCIA";
+                const r=ws1.addRow(["#"+p.id,p.mercancia,p.cant,p.precioPublico||0,p.total||0,p.clientePago||"Pendiente"]);
+                r.getCell(3).alignment={horizontal:"center"};
+                [4,5].forEach(i=>r.getCell(i).numFmt=money);
+                r.getCell(6).font={name:"Arial",bold:true,color:{argb:isPag?"FF16A34A":"FFDC2626"},size:9};r.getCell(6).alignment={horizontal:"center"};
+                if(isPag)r.eachCell(c=>{c.fill=fill("F0FDF4");});
+                r.eachCell(c=>{c.border=bdr();});
+              });
+              const tot1=ws1.addRow(["TOTAL","","",totalPedidos,totalPedidos,""]);
+              tot1.getCell(5).numFmt=money;tot1.eachCell(c=>{c.font=hF(true,DARK,10);c.fill=fill(LGRAY);c.border=bdr();});
+              ws1.addRow([]);
+              addSectionHeader(ws1,"PAGOS RECIBIDOS","F");
+              const abh1=ws1.addRow(["Fecha","Nota","Monto","","",""]);
+              abh1.eachCell(c=>{c.font=hF(true,WHITE,9);c.fill=fill("44403C");c.alignment={horizontal:"center"};c.border=bdr();});
+              misAbonos.forEach(a=>{const r=ws1.addRow([a.fecha,a.nota||"—",a.monto,"","",""]);r.getCell(3).numFmt=money;r.getCell(3).font=hF(true,GREEN,10);r.eachCell(c=>c.border=bdr());});
+              const abt1=ws1.addRow(["TOTAL RECIBIDO","",totalAbonado,"","",""]);
+              abt1.getCell(3).numFmt=money;abt1.eachCell(c=>{c.font=hF(true,GREEN,10);c.fill=fill("F0FDF4");c.border=bdr();});
+              const slt=ws1.addRow([saldo>0?"SALDO PENDIENTE":"AL CORRIENTE","",Math.abs(saldo),"","",""]);
+              slt.getCell(3).numFmt=money;slt.eachCell(c=>{c.font=hF(true,saldo>0?RED:GREEN,11);c.fill=fill(saldo>0?"FFF1F2":"F0FDF4");c.border=thk();});
+
+              // ══ HOJA 2: DESGLOSE DETALLADO ══
+              const ws2=wb.addWorksheet("Desglose Detallado");
+              ws2.columns=[{width:14},{width:32},{width:24},{width:12},{width:14},{width:14},{width:14},{width:14},{width:22}];
+              ws2.mergeCells("A1:I1");ws2.getCell("A1").value=`DESGLOSE DETALLADO — ${nombre}`;
+              ws2.getCell("A1").font=hF(true,WHITE,13);ws2.getCell("A1").fill=fill(DARK);ws2.getCell("A1").alignment={horizontal:"center"};ws2.getRow(1).height=26;
+              ws2.mergeCells("A2:I2");ws2.getCell("A2").value=`Fecha: ${fecha} | Total pedidos: ${misPedidos.length} | Pagados: ${pagadosPed.length} | Pendientes: ${pendientesPed.length}`;
+              ws2.getCell("A2").font={name:"Arial",italic:true,color:{argb:"FF78716C"},size:10};ws2.getCell("A2").fill=fill(LGRAY);ws2.getCell("A2").alignment={horizontal:"center"};
+              ws2.addRow([]);
+
+              // KPIs row 2
+              ["A4:C4","D4:F4","G4:I4"].forEach(r=>ws2.mergeCells(r));
+              ws2.getCell("A4").value="TOTAL VENDIDO";ws2.getCell("D4").value="TOTAL RECIBIDO";ws2.getCell("G4").value=saldo>0?"SALDO PENDIENTE":"AL CORRIENTE";
+              [["A4",ORANGE],["D4",GREEN],["G4",saldo>0?RED:GREEN]].forEach(([c,col])=>{ws2.getCell(c).font=hF(true,WHITE,10);ws2.getCell(c).fill=fill(col);ws2.getCell(c).alignment={horizontal:"center"};ws2.getCell(c).border=thk();});
+              ws2.getRow(4).height=20;
+              ["A5:C5","D5:F5","G5:I5"].forEach(r=>ws2.mergeCells(r));
+              ws2.getCell("A5").value=totalPedidos;ws2.getCell("D5").value=totalAbonado;ws2.getCell("G5").value=Math.abs(saldo);
+              [["A5",ORANGE],["D5",GREEN],["G5",saldo>0?RED:GREEN]].forEach(([c,col])=>{ws2.getCell(c).numFmt=money;ws2.getCell(c).font=hF(true,col,13);ws2.getCell(c).alignment={horizontal:"center"};ws2.getCell(c).border=bdr();});
+              ws2.getRow(5).height=24;ws2.addRow([]);
+
+              // Pendientes
+              addSectionHeader(ws2,"⚠  PEDIDOS PENDIENTES DE PAGO","I");
+              const ph2=ws2.addRow(["Folio","Mercancía","Proveedor","Cant.","Precio Unit.","Total","Abonado","Resta","Estado"]);
+              ph2.eachCell(c=>{c.font=hF(true,WHITE,9);c.fill=fill(ORANGE);c.alignment={horizontal:"center"};c.border=bdr();});
+              pendientesPed.forEach(p=>{
+                const asig=p.montoAsignado||0,resta=(p.total||0)-asig;
+                const r=ws2.addRow(["#"+p.id,p.mercancia,p.proveedor,p.cant,p.precioPublico||0,p.total||0,asig,resta,p.clientePago||"Pendiente"]);
+                [5,6,7,8].forEach(i=>r.getCell(i).numFmt=money);
+                r.getCell(8).font={name:"Arial",bold:true,color:{argb:resta>0?"FFDC2626":"FF16A34A"},size:9};
+                r.getCell(9).font={name:"Arial",bold:true,color:{argb:"FFDC2626"},size:9};r.getCell(9).alignment={horizontal:"center"};
+                r.eachCell(c=>{c.border=bdr();c.fill=fill("FFFBEB");});
+              });
+              const tp=ws2.addRow(["TOTAL PENDIENTE","","","","",totalPend,"","",""]);
+              tp.getCell(6).numFmt=money;tp.eachCell(c=>{c.font=hF(true,RED,10);c.fill=fill("FFF1F2");c.border=bdr();});
+              ws2.addRow([]);
+
+              // Pagados
+              addSectionHeader(ws2,"✓  PEDIDOS PAGADOS","I");
+              const ph3=ws2.addRow(["Folio","Mercancía","Proveedor","Cant.","Precio Unit.","Total","","","Estado"]);
+              ph3.eachCell(c=>{c.font=hF(true,WHITE,9);c.fill=fill(GREEN);c.alignment={horizontal:"center"};c.border=bdr();});
+              pagadosPed.forEach(p=>{
+                const r=ws2.addRow(["#"+p.id,p.mercancia,p.proveedor,p.cant,p.precioPublico||0,p.total||0,"","",p.clientePago]);
+                [5,6].forEach(i=>r.getCell(i).numFmt=money);
+                r.getCell(9).font={name:"Arial",bold:true,color:{argb:"FF16A34A"},size:9};r.getCell(9).alignment={horizontal:"center"};
+                r.eachCell(c=>{c.border=bdr();c.fill=fill("F0FDF4");});
+              });
+              const tpag=ws2.addRow(["TOTAL PAGADO","","","","",pagadosPed.reduce((s,p)=>s+(p.total||0),0),"","",""]);
+              tpag.getCell(6).numFmt=money;tpag.eachCell(c=>{c.font=hF(true,GREEN,10);c.fill=fill("DCFCE7");c.border=bdr();});
+              ws2.addRow([]);
+
+              // Pagos recibidos
+              addSectionHeader(ws2,"PAGOS RECIBIDOS","I");
+              const abh2=ws2.addRow(["Fecha","Nota","Monto","","","","","",""]);
+              abh2.eachCell(c=>{c.font=hF(true,WHITE,9);c.fill=fill("44403C");c.alignment={horizontal:"center"};c.border=bdr();});
+              misAbonos.forEach(a=>{const r=ws2.addRow([a.fecha,a.nota||"—",a.monto,"","","","","",""]);r.getCell(3).numFmt=money;r.getCell(3).font=hF(true,GREEN,10);r.eachCell(c=>c.border=bdr());});
+              const abt2=ws2.addRow(["TOTAL RECIBIDO","",totalAbonado,"","","","","",""]);
+              abt2.getCell(3).numFmt=money;abt2.eachCell(c=>{c.font=hF(true,GREEN,10);c.fill=fill("F0FDF4");c.border=bdr();});
+              const sl2=ws2.addRow([saldo>0?"SALDO PENDIENTE":"AL CORRIENTE","",Math.abs(saldo),"","","","","",""]);
+              sl2.getCell(3).numFmt=money;sl2.eachCell(c=>{c.font=hF(true,saldo>0?RED:GREEN,11);c.fill=fill(saldo>0?"FFF1F2":"F0FDF4");c.border=thk();});
+
+              const buf=await wb.xlsx.writeBuffer();
+              const blob=new Blob([buf],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
+              const a=document.createElement("a");a.href=URL.createObjectURL(blob);
+              a.download=`Estado_Cliente_${nombre.replace(/\s+/g,"_")}_${new Date().toISOString().slice(0,10)}.xlsx`;a.click();
             }} style={{width:"100%",padding:"10px 0",background:"#16a34a",border:"none",borderRadius:10,color:"#fff",cursor:"pointer",fontWeight:600,fontFamily:"'Outfit',sans-serif",fontSize:13}}>📊 Exportar Excel</button>
           </div>
         </div>
@@ -836,74 +901,181 @@ function EstadoCuentaProveedorModal({nombre,pedidos,abonosProv,onClose,fmt,C,inp
       <div style={{display:"flex",gap:10,marginTop:20,paddingTop:16,borderTop:"1px solid #f5f5f4"}}>
         <button onClick={descargarPDF} style={{...btnP,flex:1}}>🖨️ Imprimir / PDF</button>
         <button onClick={async()=>{
-          const XLSX=await loadXLSX();
-          const wb=XLSX.utils.book_new();
+          const EJS=await loadExcelJS();
+          const wb=new EJS.Workbook();
           const fecha=new Date().toLocaleDateString("es-MX");
+          const DARK="1C1917",GREEN="16A34A",RED="DC2626",ORANGE="D97706",BLUE="2563EB",LGRAY="F5F5F4",MGRAY="E7E5E4",WHITE="FFFFFF";
+          const hdrFill=t=>({type:"pattern",pattern:"solid",fgColor:{argb:"FF"+t}});
+          const hdrFont=(bold=true,color=WHITE,sz=11)=>({name:"Arial",bold,color:{argb:"FF"+color},size:sz});
+          const border=()=>({top:{style:"thin",color:{argb:"FFE7E5E4"}},left:{style:"thin",color:{argb:"FFE7E5E4"}},bottom:{style:"thin",color:{argb:"FFE7E5E4"}},right:{style:"thin",color:{argb:"FFE7E5E4"}}});
+          const thickBorder=()=>({top:{style:"medium",color:{argb:"FF1C1917"}},left:{style:"medium",color:{argb:"FF1C1917"}},bottom:{style:"medium",color:{argb:"FF1C1917"}},right:{style:"medium",color:{argb:"FF1C1917"}}});
+          const money=v=>typeof v==="number"?v:0;
 
-          // ── Hoja 1: Resumen simple ──
-          const sheet1=[
-            [`ESTADO DE CUENTA — PROVEEDOR: ${nombre}`],
-            [`Fecha: ${fecha}`],
-            [],
-            ["RESUMEN"],
-            ["Total Comprado","Total Abonado","Saldo Pendiente"],
-            [totalComprado,totalAbonado,saldo],
-            [],
-            ["PEDIDOS"],
-            ["Fecha","Mercancía","Cantidad","Costo Total","Estado Cliente"],
-            ...misPedidos.map(p=>[p.fecha,p.mercancia,p.cant,p.costo+(p.otroCosto||0),p.clientePago||"Pendiente"]),
-            ["TOTAL","",misPedidos.reduce((s,p)=>s+p.cant,0),totalComprado,""],
-            [],
-            ["PAGOS REALIZADOS"],
-            ["Fecha","Nota","Monto"],
-            ...misAbonos.map(a=>[a.fecha,a.nota||"—",a.monto]),
-            ["TOTAL ABONADO","",totalAbonado],
-          ];
-          const ws1=XLSX.utils.aoa_to_sheet(sheet1);
-          ws1['!cols']=[{wch:14},{wch:35},{wch:10},{wch:16},{wch:22}];
-          XLSX.utils.book_append_sheet(wb,ws1,"Resumen");
+          // ══ HOJA 1: RESUMEN ══
+          const ws1=wb.addWorksheet("Resumen");
+          ws1.columns=[{width:18},{width:36},{width:14},{width:16},{width:16},{width:22}];
 
-          // ── Hoja 2: Desglose por mercancía ──
+          // Título
+          ws1.mergeCells("A1:F1");
+          const t1=ws1.getCell("A1");
+          t1.value=`ESTADO DE CUENTA — ${nombre.toUpperCase()}`;
+          t1.font=hdrFont(true,WHITE,14);t1.fill=hdrFill(DARK);t1.alignment={horizontal:"center",vertical:"middle"};t1.border=thickBorder();
+          ws1.getRow(1).height=28;
+
+          ws1.mergeCells("A2:F2");
+          const t2=ws1.getCell("A2");
+          t2.value=`Fecha: ${fecha}`;
+          t2.font={name:"Arial",italic:true,color:{argb:"FF78716C"},size:10};t2.fill=hdrFill(LGRAY);t2.alignment={horizontal:"center"};
+          ws1.getRow(2).height=18;
+          ws1.addRow([]);
+
+          // KPIs
+          const kpiHdr=ws1.addRow(["TOTAL COMPRADO","TOTAL ABONADO","SALDO PENDIENTE"]);
+          ["A","B","C"].forEach((col,i)=>{
+            const c=ws1.getCell(col+"4");
+            c.font=hdrFont(true,WHITE,10);
+            c.fill=hdrFill(i===2?(saldo>0?RED:GREEN):i===0?ORANGE:GREEN);
+            c.alignment={horizontal:"center"};c.border=thickBorder();
+          });
+          ws1.mergeCells("A4:B4");ws1.getCell("A4").value="TOTAL COMPRADO";
+          ws1.mergeCells("C4:D4");ws1.getCell("C4").value="TOTAL ABONADO";
+          ws1.mergeCells("E4:F4");ws1.getCell("E4").value=saldo>0?"SALDO PENDIENTE":"AL CORRIENTE";
+          ws1.getCell("A4").fill=hdrFill(ORANGE);ws1.getCell("C4").fill=hdrFill(GREEN);ws1.getCell("E4").fill=hdrFill(saldo>0?RED:GREEN);
+          ["A4","C4","E4"].forEach(c=>{ws1.getCell(c).font=hdrFont(true,WHITE,10);ws1.getCell(c).alignment={horizontal:"center"};});
+          ws1.getRow(4).height=20;
+          const kpiVals=ws1.addRow([]);
+          ws1.mergeCells("A5:B5");ws1.getCell("A5").value=totalComprado;
+          ws1.mergeCells("C5:D5");ws1.getCell("C5").value=totalAbonado;
+          ws1.mergeCells("E5:F5");ws1.getCell("E5").value=Math.abs(saldo);
+          ["A5","C5","E5"].forEach((c,i)=>{const cell=ws1.getCell(c);cell.numFmt='"$"#,##0.00';cell.font=hdrFont(true,i===2?(saldo>0?RED:GREEN):i===0?ORANGE:GREEN,13);cell.alignment={horizontal:"center"};cell.border=border();});
+          ws1.getRow(5).height=24;
+          ws1.addRow([]);
+
+          // Pedidos
+          const ph=ws1.addRow(["PEDIDOS"]);ws1.mergeCells(`A7:F7`);
+          ws1.getCell("A7").font=hdrFont(true,WHITE,11);ws1.getCell("A7").fill=hdrFill(DARK);ws1.getCell("A7").alignment={horizontal:"center"};ws1.getRow(7).height=20;
+          const pedHdr=ws1.addRow(["Fecha","Mercancía","Cantidad","Costo Total","Costo Unit.","Estado Cliente"]);
+          pedHdr.eachCell(c=>{c.font=hdrFont(true,WHITE,10);c.fill=hdrFill("44403C");c.alignment={horizontal:"center"};c.border=border();});
+          ws1.getRow(8).height=18;
+          misPedidos.forEach(p=>{
+            const isPagado=p.clientePago==="PAGADO"||p.clientePago==="PAGADO TRANSFERENCIA";
+            const r=ws1.addRow([p.fecha,p.mercancia,p.cant,p.costo+(p.otroCosto||0),p.unitario||0,p.clientePago||"Pendiente"]);
+            r.getCell(1).alignment={horizontal:"center"};
+            r.getCell(3).alignment={horizontal:"center"};
+            r.getCell(4).numFmt='"$"#,##0.00';r.getCell(5).numFmt='"$"#,##0.00';
+            r.getCell(6).font={name:"Arial",bold:true,color:{argb:isPagado?"FF16A34A":"FFDC2626"},size:10};
+            r.getCell(6).alignment={horizontal:"center"};
+            r.eachCell(c=>{c.border=border();if(!c.fill||!c.fill.fgColor)c.fill=hdrFill(WHITE);});
+          });
+          const totRow=ws1.addRow(["TOTAL","",misPedidos.reduce((s,p)=>s+p.cant,0),totalComprado,"",""]);
+          totRow.eachCell(c=>{c.font=hdrFont(true,DARK,10);c.fill=hdrFill(LGRAY);c.border=border();});
+          totRow.getCell(4).numFmt='"$"#,##0.00';
+          ws1.addRow([]);
+
+          // Pagos
+          const pagoR=ws1.rowCount+1;
+          ws1.addRow(["PAGOS REALIZADOS AL PROVEEDOR"]);ws1.mergeCells(`A${pagoR}:F${pagoR}`);
+          ws1.getCell(`A${pagoR}`).font=hdrFont(true,WHITE,11);ws1.getCell(`A${pagoR}`).fill=hdrFill(DARK);ws1.getCell(`A${pagoR}`).alignment={horizontal:"center"};ws1.getRow(pagoR).height=20;
+          const abHdr=ws1.addRow(["Fecha","Nota","Monto","","",""]);
+          abHdr.eachCell(c=>{c.font=hdrFont(true,WHITE,10);c.fill=hdrFill("44403C");c.alignment={horizontal:"center"};c.border=border();});
+          misAbonos.forEach(a=>{
+            const r=ws1.addRow([a.fecha,a.nota||"—",a.monto,"","",""]);
+            r.getCell(3).numFmt='"$"#,##0.00';r.getCell(3).font={name:"Arial",bold:true,color:{argb:"FF16A34A"},size:10};
+            r.eachCell(c=>{c.border=border();});
+          });
+          const abTot=ws1.addRow(["TOTAL ABONADO","",totalAbonado,"","",""]);
+          abTot.eachCell(c=>{c.font=hdrFont(true,GREEN,10);c.fill=hdrFill("F0FDF4");c.border=border();});
+          abTot.getCell(3).numFmt='"$"#,##0.00';
+          const saldoRow=ws1.addRow([saldo>0?"SALDO PENDIENTE":"AL CORRIENTE","",Math.abs(saldo),"","",""]);
+          saldoRow.eachCell(c=>{c.font=hdrFont(true,saldo>0?RED:GREEN,11);c.fill=hdrFill(saldo>0?"FFF1F2":"F0FDF4");c.border=thickBorder();});
+          saldoRow.getCell(3).numFmt='"$"#,##0.00';
+
+          // ══ HOJA 2: DESGLOSE POR MERCANCÍA ══
+          const ws2=wb.addWorksheet("Desglose por Mercancía");
+          ws2.columns=[{width:16},{width:32},{width:14},{width:14},{width:14},{width:14},{width:14},{width:22}];
+          ws2.mergeCells("A1:H1");
+          const wt=ws2.getCell("A1");
+          wt.value=`DESGLOSE POR MERCANCÍA — ${nombre}`;
+          wt.font=hdrFont(true,WHITE,13);wt.fill=hdrFill(DARK);wt.alignment={horizontal:"center",vertical:"middle"};wt.border=thickBorder();
+          ws2.getRow(1).height=26;
+          ws2.mergeCells("A2:H2");ws2.getCell("A2").value=`Fecha: ${fecha}`;
+          ws2.getCell("A2").font={name:"Arial",italic:true,color:{argb:"FF78716C"},size:10};ws2.getCell("A2").fill=hdrFill(LGRAY);ws2.getCell("A2").alignment={horizontal:"center"};
+
           const mercancias=[...new Set(misPedidos.map(p=>p.mercancia))];
-          const sheet2=[
-            [`DESGLOSE POR MERCANCÍA — ${nombre}`],
-            [`Fecha: ${fecha}`],
-            [],
-          ];
           mercancias.forEach(merc=>{
+            ws2.addRow([]);
             const psMerc=misPedidos.filter(p=>p.mercancia===merc&&!p.esBodega);
             const bodMerc=misPedidos.filter(p=>p.mercancia===merc&&p.esBodega);
             const totalCant=psMerc.reduce((s,p)=>s+(p.cant||0),0)+bodMerc.reduce((s,p)=>s+(p.cant||0),0);
             const costoUnit=psMerc[0]?.unitario||bodMerc[0]?.unitario||0;
-            const cantVendida=psMerc.reduce((s,p)=>s+(p.cant||0),0);
-            const cantBodega=bodMerc.reduce((s,p)=>s+(p.cant||0),0);
-            sheet2.push([`MERCANCÍA: ${merc}`]);
-            sheet2.push(["Costo unitario",costoUnit,"Total comprado",totalCant,"Vendido",cantVendida,"En bodega",cantBodega]);
-            sheet2.push([]);
+            const cantVend=psMerc.reduce((s,p)=>s+(p.cant||0),0);
+            const cantBod=bodMerc.reduce((s,p)=>s+(p.cant||0),0);
+            const cantDisp=cantBod;
+
+            // Mercancía header
+            const mRow=ws2.rowCount+1;
+            ws2.addRow([`📦  ${merc}`,"","","","","","",""]);
+            ws2.mergeCells(`A${mRow}:H${mRow}`);
+            ws2.getCell(`A${mRow}`).font=hdrFont(true,WHITE,11);
+            ws2.getCell(`A${mRow}`).fill=hdrFill("44403C");
+            ws2.getCell(`A${mRow}`).alignment={horizontal:"left",indent:1};
+            ws2.getRow(mRow).height=20;
+
+            // Stats row
+            const sRow=ws2.addRow(["Costo/u",costoUnit,"Total comprado",totalCant,"Vendido",cantVend,"Disponible",cantDisp]);
+            sRow.eachCell((c,i)=>{
+              if(i%2===1){c.font=hdrFont(false,"78716C",9);c.alignment={horizontal:"right"};}
+              else{c.font=hdrFont(true,DARK,11);c.alignment={horizontal:"left"};}
+              c.fill=hdrFill(LGRAY);c.border=border();
+            });
+            sRow.getCell(2).numFmt='"$"#,##0.00';
+
             if(psMerc.length>0){
-              sheet2.push(["  Pedido #","Cliente","Cantidad","Precio venta","Total venta","Abonado","Resta","Estado"]);
+              ws2.addRow([]);
+              const colHdr=ws2.addRow(["  Pedido #","Cliente","Cant.","Precio venta","Total venta","Abonado","Resta","Estado"]);
+              colHdr.eachCell(c=>{c.font=hdrFont(true,WHITE,9);c.fill=hdrFill(BLUE);c.alignment={horizontal:"center"};c.border=border();});
               psMerc.forEach(p=>{
                 const asig=p.montoAsignado||0;
-                sheet2.push(["  #"+p.id,p.cliente||"—",p.cant,p.precioPublico||0,p.total||0,asig,(p.total||0)-asig,p.clientePago||"Pendiente"]);
+                const resta=(p.total||0)-asig;
+                const isPagado=p.clientePago==="PAGADO"||p.clientePago==="PAGADO TRANSFERENCIA";
+                const r=ws2.addRow(["  #"+p.id,p.cliente||"—",p.cant,p.precioPublico||0,p.total||0,asig,resta,p.clientePago||"Pendiente"]);
+                [4,5,6,7].forEach(i=>r.getCell(i).numFmt='"$"#,##0.00');
+                r.getCell(8).font={name:"Arial",bold:true,color:{argb:isPagado?"FF16A34A":"FFDC2626"},size:9};
+                r.getCell(8).alignment={horizontal:"center"};
+                r.eachCell(c=>{c.border=border();});
+                if(isPagado)r.eachCell(c=>{c.fill=hdrFill("F0FDF4");});
               });
-              sheet2.push(["  SUBTOTAL","",cantVendida,"",psMerc.reduce((s,p)=>s+(p.total||0),0),"","",""]);
+              const sub=ws2.addRow(["  SUBTOTAL","",cantVend,"",psMerc.reduce((s,p)=>s+(p.total||0),0),"","",""]);
+              sub.eachCell(c=>{c.font=hdrFont(true,DARK,9);c.fill=hdrFill(LGRAY);c.border=border();});
+              sub.getCell(5).numFmt='"$"#,##0.00';
             }
-            if(bodMerc.length>0){
-              sheet2.push(["  En bodega sin vender","BODEGA",cantBodega,0,0,0,0,"En inventario"]);
+            if(cantDisp>0){
+              const bodRow=ws2.addRow(["  ⚠ En bodega sin vender","",cantDisp,"—","—","—","—","En inventario"]);
+              bodRow.eachCell(c=>{c.fill=hdrFill("FFFBEB");c.font={name:"Arial",bold:true,color:{argb:"FFD97706"},size:9};c.border=border();});
             }
-            sheet2.push([]);
-            sheet2.push([]);
           });
-          sheet2.push(["PAGOS AL PROVEEDOR"]);
-          sheet2.push(["Fecha","Nota","Monto"]);
-          misAbonos.forEach(a=>sheet2.push([a.fecha,a.nota||"—",a.monto]));
-          sheet2.push(["TOTAL ABONADO","",totalAbonado]);
-          sheet2.push(["SALDO PENDIENTE","",saldo]);
-          const ws2=XLSX.utils.aoa_to_sheet(sheet2);
-          ws2['!cols']=[{wch:18},{wch:30},{wch:12},{wch:14},{wch:14},{wch:14},{wch:14},{wch:22}];
-          XLSX.utils.book_append_sheet(wb,ws2,"Desglose por Mercancía");
 
-          XLSX.writeFile(wb,`Estado_Proveedor_${nombre.replace(/\s+/g,"_")}_${new Date().toISOString().slice(0,10)}.xlsx`);
+          ws2.addRow([]);
+          const pr=ws2.rowCount+1;
+          ws2.addRow(["PAGOS AL PROVEEDOR","","","","","","",""]);
+          ws2.mergeCells(`A${pr}:H${pr}`);
+          ws2.getCell(`A${pr}`).font=hdrFont(true,WHITE,11);ws2.getCell(`A${pr}`).fill=hdrFill(DARK);ws2.getCell(`A${pr}`).alignment={horizontal:"center"};ws2.getRow(pr).height=20;
+          const phdr=ws2.addRow(["Fecha","Nota","Monto","","","","",""]);
+          phdr.eachCell(c=>{c.font=hdrFont(true,WHITE,9);c.fill=hdrFill("44403C");c.alignment={horizontal:"center"};c.border=border();});
+          misAbonos.forEach(a=>{
+            const r=ws2.addRow([a.fecha,a.nota||"—",a.monto,"","","","",""]);
+            r.getCell(3).numFmt='"$"#,##0.00';r.getCell(3).font={name:"Arial",bold:true,color:{argb:"FF16A34A"},size:10};
+            r.eachCell(c=>{c.border=border();});
+          });
+          const at=ws2.addRow(["TOTAL ABONADO","",totalAbonado,"","","","",""]);
+          at.eachCell(c=>{c.font=hdrFont(true,GREEN,10);c.fill=hdrFill("F0FDF4");c.border=border();});at.getCell(3).numFmt='"$"#,##0.00';
+          const st=ws2.addRow([saldo>0?"SALDO PENDIENTE":"AL CORRIENTE","",Math.abs(saldo),"","","","",""]);
+          st.eachCell(c=>{c.font=hdrFont(true,saldo>0?RED:GREEN,11);c.fill=hdrFill(saldo>0?"FFF1F2":"F0FDF4");c.border=thickBorder();});st.getCell(3).numFmt='"$"#,##0.00';
+
+          const buf=await wb.xlsx.writeBuffer();
+          const blob=new Blob([buf],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
+          const a=document.createElement("a");a.href=URL.createObjectURL(blob);
+          a.download=`Estado_Proveedor_${nombre.replace(/\s+/g,"_")}_${new Date().toISOString().slice(0,10)}.xlsx`;a.click();
         }} style={{flex:1,padding:"10px 0",background:"#16a34a",border:"none",borderRadius:10,color:"#fff",cursor:"pointer",fontWeight:600,fontFamily:"'Outfit',sans-serif"}}>📊 Exportar Excel</button>
         <button onClick={onClose} style={{flex:1,padding:"10px 0",background:"#f5f5f4",border:"1px solid #e7e5e4",borderRadius:10,color:"#44403c",cursor:"pointer",fontFamily:"'Outfit',sans-serif",fontWeight:500}}>Cerrar</button>
       </div>
@@ -911,11 +1083,11 @@ function EstadoCuentaProveedorModal({nombre,pedidos,abonosProv,onClose,fmt,C,inp
   );
 }
 
-const loadXLSX=()=>new Promise(resolve=>{
-  if(window.XLSX) return resolve(window.XLSX);
+const loadExcelJS=()=>new Promise(resolve=>{
+  if(window.ExcelJS) return resolve(window.ExcelJS);
   const s=document.createElement('script');
-  s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
-  s.onload=()=>resolve(window.XLSX);
+  s.src='https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js';
+  s.onload=()=>resolve(window.ExcelJS);
   document.head.appendChild(s);
 });
 
