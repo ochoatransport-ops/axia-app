@@ -597,22 +597,47 @@ function EstadoCuentaModal({nombre,pedidos,abonosCli,flujo,onClose,fmt,C,inp,btn
 
           {/* Excel export */}
           <div style={{padding:"16px 0 0",borderTop:"1px solid #f5f5f4",marginTop:16}}>
-            <button onClick={()=>{
+            <button onClick={async()=>{
+              const XLSX=await loadXLSX();
+              const wb=XLSX.utils.book_new();
+              const fecha=new Date().toLocaleDateString("es-MX");
               const pendientesPed=misPedidos.filter(p=>p.clientePago!=="PAGADO"&&p.clientePago!=="PAGADO TRANSFERENCIA");
               const pagadosPed=misPedidos.filter(p=>p.clientePago==="PAGADO"||p.clientePago==="PAGADO TRANSFERENCIA");
               const totalPend=pendientesPed.reduce((s,p)=>s+(p.total||0),0);
-              const rows=[
-                [`ESTADO DE CUENTA — CLIENTE: ${nombre.toUpperCase()}`],
-                [`Fecha: ${new Date().toLocaleDateString("es-MX")}`],
+
+              // ── Hoja 1: Resumen simple ──
+              const sheet1=[
+                [`ESTADO DE CUENTA — CLIENTE: ${nombre}`],
+                [`Fecha: ${fecha}`],
                 [],
-                ["═══ RESUMEN GENERAL ═══"],
+                ["RESUMEN"],
                 ["Total Vendido","Total Recibido","Saldo Pendiente"],
                 [totalPedidos,totalAbonado,saldo],
                 [],
-                ["Pedidos totales","Pedidos pagados","Pedidos pendientes"],
-                [misPedidos.length,pagadosPed.length,pendientesPed.length],
+                ["PEDIDOS"],
+                ["Folio","Mercancía","Cantidad","Precio Unit.","Total","Estado"],
+                ...misPedidos.map(p=>["#"+p.id,p.mercancia,p.cant,p.precioPublico||0,p.total||0,p.clientePago||"Pendiente"]),
+                ["TOTAL","","","",totalPedidos,""],
                 [],
-                ["═══ PEDIDOS PENDIENTES DE PAGO ═══"],
+                ["PAGOS RECIBIDOS"],
+                ["Fecha","Nota","Monto"],
+                ...misAbonos.map(a=>[a.fecha,a.nota||"—",a.monto]),
+                ["TOTAL RECIBIDO","",totalAbonado],
+              ];
+              const ws1=XLSX.utils.aoa_to_sheet(sheet1);
+              ws1['!cols']=[{wch:12},{wch:35},{wch:10},{wch:14},{wch:14},{wch:22}];
+              XLSX.utils.book_append_sheet(wb,ws1,"Resumen");
+
+              // ── Hoja 2: Desglose detallado ──
+              const sheet2=[
+                [`DESGLOSE DETALLADO — ${nombre}`],
+                [`Fecha: ${fecha}`],
+                [],
+                ["RESUMEN"],
+                ["Total Vendido","Total Recibido","Saldo Pendiente","Pedidos totales","Pagados","Pendientes"],
+                [totalPedidos,totalAbonado,saldo,misPedidos.length,pagadosPed.length,pendientesPed.length],
+                [],
+                ["PEDIDOS PENDIENTES DE PAGO"],
                 ["Folio","Mercancía","Proveedor","Cant.","Precio Unit.","Total","Abonado","Resta","Estado"],
                 ...pendientesPed.map(p=>{
                   const asig=p.montoAsignado||0;
@@ -620,20 +645,24 @@ function EstadoCuentaModal({nombre,pedidos,abonosCli,flujo,onClose,fmt,C,inp,btn
                 }),
                 ["TOTAL PENDIENTE","","","","",totalPend,"","",""],
                 [],
-                ["═══ PEDIDOS PAGADOS ═══"],
+                ["PEDIDOS PAGADOS"],
                 ["Folio","Mercancía","Proveedor","Cant.","Precio Unit.","Total","Estado"],
                 ...pagadosPed.map(p=>["#"+p.id,p.mercancia,p.proveedor,p.cant,p.precioPublico||0,p.total||0,p.clientePago]),
                 ["TOTAL PAGADO","","","","",pagadosPed.reduce((s,p)=>s+(p.total||0),0),""],
                 [],
-                ["═══ PAGOS RECIBIDOS ═══"],
+                ["PAGOS RECIBIDOS"],
                 ["Fecha","Nota","Monto"],
                 ...misAbonos.map(a=>[a.fecha,a.nota||"—",a.monto]),
                 ["TOTAL RECIBIDO","",totalAbonado],
                 [],
                 ["SALDO PENDIENTE","",saldo],
               ];
-              downloadCSV(`Estado_Cliente_${nombre.replace(/\s+/g,"_")}_${new Date().toISOString().slice(0,10)}.csv`,rows);
-            }} style={{width:"100%",padding:"10px 0",background:"#16a34a",border:"none",borderRadius:10,color:"#fff",cursor:"pointer",fontWeight:600,fontFamily:"'Outfit',sans-serif",fontSize:13}}>📊 Exportar CSV</button>
+              const ws2=XLSX.utils.aoa_to_sheet(sheet2);
+              ws2['!cols']=[{wch:12},{wch:35},{wch:25},{wch:10},{wch:14},{wch:14},{wch:14},{wch:14},{wch:22}];
+              XLSX.utils.book_append_sheet(wb,ws2,"Desglose Detallado");
+
+              XLSX.writeFile(wb,`Estado_Cliente_${nombre.replace(/\s+/g,"_")}_${new Date().toISOString().slice(0,10)}.xlsx`);
+            }} style={{width:"100%",padding:"10px 0",background:"#16a34a",border:"none",borderRadius:10,color:"#fff",cursor:"pointer",fontWeight:600,fontFamily:"'Outfit',sans-serif",fontSize:13}}>📊 Exportar Excel</button>
           </div>
         </div>
       </div>
@@ -806,55 +835,89 @@ function EstadoCuentaProveedorModal({nombre,pedidos,abonosProv,onClose,fmt,C,inp
       {/* Actions */}
       <div style={{display:"flex",gap:10,marginTop:20,paddingTop:16,borderTop:"1px solid #f5f5f4"}}>
         <button onClick={descargarPDF} style={{...btnP,flex:1}}>🖨️ Imprimir / PDF</button>
-        <button onClick={()=>{
+        <button onClick={async()=>{
+          const XLSX=await loadXLSX();
+          const wb=XLSX.utils.book_new();
           const fecha=new Date().toLocaleDateString("es-MX");
-          // Group pedidos by mercancia
-          const mercancias=[...new Set(misPedidos.map(p=>p.mercancia))];
-          const rows=[
-            [`ESTADO DE CUENTA — PROVEEDOR: ${nombre.toUpperCase()}`],
+
+          // ── Hoja 1: Resumen simple ──
+          const sheet1=[
+            [`ESTADO DE CUENTA — PROVEEDOR: ${nombre}`],
             [`Fecha: ${fecha}`],
             [],
-            ["═══ RESUMEN GENERAL ═══"],
-            ["Total Comprado (USD)","Total Abonado (USD)","Saldo Pendiente (USD)"],
+            ["RESUMEN"],
+            ["Total Comprado","Total Abonado","Saldo Pendiente"],
             [totalComprado,totalAbonado,saldo],
             [],
-            ["═══ DESGLOSE POR MERCANCÍA ═══"],
+            ["PEDIDOS"],
+            ["Fecha","Mercancía","Cantidad","Costo Total","Estado Cliente"],
+            ...misPedidos.map(p=>[p.fecha,p.mercancia,p.cant,p.costo+(p.otroCosto||0),p.clientePago||"Pendiente"]),
+            ["TOTAL","",misPedidos.reduce((s,p)=>s+p.cant,0),totalComprado,""],
+            [],
+            ["PAGOS REALIZADOS"],
+            ["Fecha","Nota","Monto"],
+            ...misAbonos.map(a=>[a.fecha,a.nota||"—",a.monto]),
+            ["TOTAL ABONADO","",totalAbonado],
+          ];
+          const ws1=XLSX.utils.aoa_to_sheet(sheet1);
+          ws1['!cols']=[{wch:14},{wch:35},{wch:10},{wch:16},{wch:22}];
+          XLSX.utils.book_append_sheet(wb,ws1,"Resumen");
+
+          // ── Hoja 2: Desglose por mercancía ──
+          const mercancias=[...new Set(misPedidos.map(p=>p.mercancia))];
+          const sheet2=[
+            [`DESGLOSE POR MERCANCÍA — ${nombre}`],
+            [`Fecha: ${fecha}`],
             [],
           ];
-          // Per mercancía breakdown
           mercancias.forEach(merc=>{
             const psMerc=misPedidos.filter(p=>p.mercancia===merc&&!p.esBodega);
             const bodMerc=misPedidos.filter(p=>p.mercancia===merc&&p.esBodega);
-            const totalComp=psMerc.reduce((s,p)=>s+(p.cant||0),0)+bodMerc.reduce((s,p)=>s+(p.cant||0),0);
+            const totalCant=psMerc.reduce((s,p)=>s+(p.cant||0),0)+bodMerc.reduce((s,p)=>s+(p.cant||0),0);
             const costoUnit=psMerc[0]?.unitario||bodMerc[0]?.unitario||0;
-            // find bodega entries for this merc via bodega array - passed as prop
-            rows.push([`📦 ${merc}`]);
-            rows.push(["Costo unitario (USD)",costoUnit,"Total piezas compradas",totalComp,"Costo total USD",totalComp*costoUnit]);
-            rows.push([]);
+            const cantVendida=psMerc.reduce((s,p)=>s+(p.cant||0),0);
+            const cantBodega=bodMerc.reduce((s,p)=>s+(p.cant||0),0);
+            sheet2.push([`MERCANCÍA: ${merc}`]);
+            sheet2.push(["Costo unitario",costoUnit,"Total comprado",totalCant,"Vendido",cantVendida,"En bodega",cantBodega]);
+            sheet2.push([]);
             if(psMerc.length>0){
-              rows.push(["  PEDIDOS CLIENTE","Cliente","Cant.","Precio venta","Total venta","Estado"]);
-              psMerc.forEach(p=>rows.push(["  #"+p.id,p.cliente||"—",p.cant,p.precioPublico||0,p.total||0,p.clientePago||"Pendiente"]));
-              rows.push(["  Subtotal vendido","",psMerc.reduce((s,p)=>s+p.cant,0),"",psMerc.reduce((s,p)=>s+(p.total||0),0),""]);
+              sheet2.push(["  Pedido #","Cliente","Cantidad","Precio venta","Total venta","Abonado","Resta","Estado"]);
+              psMerc.forEach(p=>{
+                const asig=p.montoAsignado||0;
+                sheet2.push(["  #"+p.id,p.cliente||"—",p.cant,p.precioPublico||0,p.total||0,asig,(p.total||0)-asig,p.clientePago||"Pendiente"]);
+              });
+              sheet2.push(["  SUBTOTAL","",cantVendida,"",psMerc.reduce((s,p)=>s+(p.total||0),0),"","",""]);
             }
             if(bodMerc.length>0){
-              bodMerc.forEach(p=>rows.push(["  En bodega (sin vender)","BODEGA",p.cant,0,0,"En inventario"]));
+              sheet2.push(["  En bodega sin vender","BODEGA",cantBodega,0,0,0,0,"En inventario"]);
             }
-            rows.push([]);
+            sheet2.push([]);
+            sheet2.push([]);
           });
-          // Pagos
-          rows.push(["═══ PAGOS REALIZADOS AL PROVEEDOR ═══"]);
-          rows.push(["Fecha","Nota","Monto (USD)"]);
-          misAbonos.forEach(a=>rows.push([a.fecha,a.nota||"—",a.monto]));
-          rows.push(["TOTAL ABONADO","",totalAbonado]);
-          rows.push([]);
-          rows.push(["SALDO PENDIENTE","",saldo]);
-          downloadCSV(`Estado_Proveedor_${nombre.replace(/\s+/g,"_")}_${new Date().toISOString().slice(0,10)}.csv`,rows);
-        }} style={{flex:1,padding:"10px 0",background:"#16a34a",border:"none",borderRadius:10,color:"#fff",cursor:"pointer",fontWeight:600,fontFamily:"'Outfit',sans-serif"}}>📊 Exportar CSV</button>
+          sheet2.push(["PAGOS AL PROVEEDOR"]);
+          sheet2.push(["Fecha","Nota","Monto"]);
+          misAbonos.forEach(a=>sheet2.push([a.fecha,a.nota||"—",a.monto]));
+          sheet2.push(["TOTAL ABONADO","",totalAbonado]);
+          sheet2.push(["SALDO PENDIENTE","",saldo]);
+          const ws2=XLSX.utils.aoa_to_sheet(sheet2);
+          ws2['!cols']=[{wch:18},{wch:30},{wch:12},{wch:14},{wch:14},{wch:14},{wch:14},{wch:22}];
+          XLSX.utils.book_append_sheet(wb,ws2,"Desglose por Mercancía");
+
+          XLSX.writeFile(wb,`Estado_Proveedor_${nombre.replace(/\s+/g,"_")}_${new Date().toISOString().slice(0,10)}.xlsx`);
+        }} style={{flex:1,padding:"10px 0",background:"#16a34a",border:"none",borderRadius:10,color:"#fff",cursor:"pointer",fontWeight:600,fontFamily:"'Outfit',sans-serif"}}>📊 Exportar Excel</button>
         <button onClick={onClose} style={{flex:1,padding:"10px 0",background:"#f5f5f4",border:"1px solid #e7e5e4",borderRadius:10,color:"#44403c",cursor:"pointer",fontFamily:"'Outfit',sans-serif",fontWeight:500}}>Cerrar</button>
       </div>
     </Modal>
   );
 }
+
+const loadXLSX=()=>new Promise(resolve=>{
+  if(window.XLSX) return resolve(window.XLSX);
+  const s=document.createElement('script');
+  s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+  s.onload=()=>resolve(window.XLSX);
+  document.head.appendChild(s);
+});
 
 const downloadCSV=(filename,rows)=>{
   const escape=v=>{
