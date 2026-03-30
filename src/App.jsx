@@ -598,22 +598,39 @@ function EstadoCuentaModal({nombre,pedidos,abonosCli,flujo,onClose,fmt,C,inp,btn
           {/* Excel export */}
           <div style={{padding:"16px 0 0",borderTop:"1px solid #f5f5f4",marginTop:16}}>
             <button onClick={()=>{
+              const pendientesPed=misPedidos.filter(p=>p.clientePago!=="PAGADO"&&p.clientePago!=="PAGADO TRANSFERENCIA");
+              const pagadosPed=misPedidos.filter(p=>p.clientePago==="PAGADO"||p.clientePago==="PAGADO TRANSFERENCIA");
+              const totalPend=pendientesPed.reduce((s,p)=>s+(p.total||0),0);
               const rows=[
-                [`Estado de Cuenta — Cliente: ${nombre}`],
+                [`ESTADO DE CUENTA — CLIENTE: ${nombre.toUpperCase()}`],
                 [`Fecha: ${new Date().toLocaleDateString("es-MX")}`],
                 [],
-                ["RESUMEN"],
-                ["Total Vendido",totalPedidos,"Total Recibido",totalAbonado,"Saldo Pendiente",saldo],
+                ["═══ RESUMEN GENERAL ═══"],
+                ["Total Vendido","Total Recibido","Saldo Pendiente"],
+                [totalPedidos,totalAbonado,saldo],
                 [],
-                ["PEDIDOS"],
-                ["Folio","Mercancía","Cantidad","Precio Unit.","Total Venta","Estado"],
-                ...misPedidos.map(p=>[p.id,p.mercancia,p.cant,p.precioPublico||0,p.total||0,p.clientePago||"Pendiente"]),
-                ["TOTAL","","","",totalPedidos,""],
+                ["Pedidos totales","Pedidos pagados","Pedidos pendientes"],
+                [misPedidos.length,pagadosPed.length,pendientesPed.length],
                 [],
-                ["PAGOS RECIBIDOS"],
+                ["═══ PEDIDOS PENDIENTES DE PAGO ═══"],
+                ["Folio","Mercancía","Proveedor","Cant.","Precio Unit.","Total","Abonado","Resta","Estado"],
+                ...pendientesPed.map(p=>{
+                  const asig=p.montoAsignado||0;
+                  return ["#"+p.id,p.mercancia,p.proveedor,p.cant,p.precioPublico||0,p.total||0,asig,(p.total||0)-asig,p.clientePago||"Pendiente"];
+                }),
+                ["TOTAL PENDIENTE","","","","",totalPend,"","",""],
+                [],
+                ["═══ PEDIDOS PAGADOS ═══"],
+                ["Folio","Mercancía","Proveedor","Cant.","Precio Unit.","Total","Estado"],
+                ...pagadosPed.map(p=>["#"+p.id,p.mercancia,p.proveedor,p.cant,p.precioPublico||0,p.total||0,p.clientePago]),
+                ["TOTAL PAGADO","","","","",pagadosPed.reduce((s,p)=>s+(p.total||0),0),""],
+                [],
+                ["═══ PAGOS RECIBIDOS ═══"],
                 ["Fecha","Nota","Monto"],
-                ...misAbonos.map(a=>[a.fecha,a.nota||"",a.monto]),
+                ...misAbonos.map(a=>[a.fecha,a.nota||"—",a.monto]),
                 ["TOTAL RECIBIDO","",totalAbonado],
+                [],
+                ["SALDO PENDIENTE","",saldo],
               ];
               downloadCSV(`Estado_Cliente_${nombre.replace(/\s+/g,"_")}_${new Date().toISOString().slice(0,10)}.csv`,rows);
             }} style={{width:"100%",padding:"10px 0",background:"#16a34a",border:"none",borderRadius:10,color:"#fff",cursor:"pointer",fontWeight:600,fontFamily:"'Outfit',sans-serif",fontSize:13}}>📊 Exportar CSV</button>
@@ -791,23 +808,46 @@ function EstadoCuentaProveedorModal({nombre,pedidos,abonosProv,onClose,fmt,C,inp
         <button onClick={descargarPDF} style={{...btnP,flex:1}}>🖨️ Imprimir / PDF</button>
         <button onClick={()=>{
           const fecha=new Date().toLocaleDateString("es-MX");
+          // Group pedidos by mercancia
+          const mercancias=[...new Set(misPedidos.map(p=>p.mercancia))];
           const rows=[
-            [`Estado de Cuenta — Proveedor: ${nombre}`],
+            [`ESTADO DE CUENTA — PROVEEDOR: ${nombre.toUpperCase()}`],
             [`Fecha: ${fecha}`],
             [],
-            ["RESUMEN"],
-            ["Total Comprado",totalComprado,"Total Abonado",totalAbonado,"Saldo",saldo],
+            ["═══ RESUMEN GENERAL ═══"],
+            ["Total Comprado (USD)","Total Abonado (USD)","Saldo Pendiente (USD)"],
+            [totalComprado,totalAbonado,saldo],
             [],
-            ["PEDIDOS"],
-            ["Fecha","Mercancía","Cantidad","Costo Total","Estado Cliente"],
-            ...misPedidos.map(p=>[p.fecha,p.mercancia,p.cant,p.costo+(p.otroCosto||0),p.clientePago||"Pendiente"]),
-            ["TOTAL","",misPedidos.reduce((s,p)=>s+p.cant,0),totalComprado,""],
+            ["═══ DESGLOSE POR MERCANCÍA ═══"],
             [],
-            ["PAGOS REALIZADOS"],
-            ["Fecha","Nota","Monto"],
-            ...misAbonos.map(a=>[a.fecha,a.nota||"",a.monto]),
-            ["TOTAL ABONADO","",totalAbonado],
           ];
+          // Per mercancía breakdown
+          mercancias.forEach(merc=>{
+            const psMerc=misPedidos.filter(p=>p.mercancia===merc&&!p.esBodega);
+            const bodMerc=misPedidos.filter(p=>p.mercancia===merc&&p.esBodega);
+            const totalComp=psMerc.reduce((s,p)=>s+(p.cant||0),0)+bodMerc.reduce((s,p)=>s+(p.cant||0),0);
+            const costoUnit=psMerc[0]?.unitario||bodMerc[0]?.unitario||0;
+            // find bodega entries for this merc via bodega array - passed as prop
+            rows.push([`📦 ${merc}`]);
+            rows.push(["Costo unitario (USD)",costoUnit,"Total piezas compradas",totalComp,"Costo total USD",totalComp*costoUnit]);
+            rows.push([]);
+            if(psMerc.length>0){
+              rows.push(["  PEDIDOS CLIENTE","Cliente","Cant.","Precio venta","Total venta","Estado"]);
+              psMerc.forEach(p=>rows.push(["  #"+p.id,p.cliente||"—",p.cant,p.precioPublico||0,p.total||0,p.clientePago||"Pendiente"]));
+              rows.push(["  Subtotal vendido","",psMerc.reduce((s,p)=>s+p.cant,0),"",psMerc.reduce((s,p)=>s+(p.total||0),0),""]);
+            }
+            if(bodMerc.length>0){
+              bodMerc.forEach(p=>rows.push(["  En bodega (sin vender)","BODEGA",p.cant,0,0,"En inventario"]));
+            }
+            rows.push([]);
+          });
+          // Pagos
+          rows.push(["═══ PAGOS REALIZADOS AL PROVEEDOR ═══"]);
+          rows.push(["Fecha","Nota","Monto (USD)"]);
+          misAbonos.forEach(a=>rows.push([a.fecha,a.nota||"—",a.monto]));
+          rows.push(["TOTAL ABONADO","",totalAbonado]);
+          rows.push([]);
+          rows.push(["SALDO PENDIENTE","",saldo]);
           downloadCSV(`Estado_Proveedor_${nombre.replace(/\s+/g,"_")}_${new Date().toISOString().slice(0,10)}.csv`,rows);
         }} style={{flex:1,padding:"10px 0",background:"#16a34a",border:"none",borderRadius:10,color:"#fff",cursor:"pointer",fontWeight:600,fontFamily:"'Outfit',sans-serif"}}>📊 Exportar CSV</button>
         <button onClick={onClose} style={{flex:1,padding:"10px 0",background:"#f5f5f4",border:"1px solid #e7e5e4",borderRadius:10,color:"#44403c",cursor:"pointer",fontFamily:"'Outfit',sans-serif",fontWeight:500}}>Cerrar</button>
@@ -2051,21 +2091,24 @@ function Axia(){
           const existing=bodega.find(b=>b.id===bForm._editId);
           const pendientes=cant-(existing.distribuciones||[]).reduce((s,d)=>s+d.cant,0);
           setBodega(p=>p.map(b=>b.id===bForm._editId?{...b,fecha,proveedor:bForm.proveedor,mercancia:bForm.mercancia,cant,unitario,costoTotal:cant*unitario,notas:bForm.notas||""}:b));
-          // Update ALL pedidos related to this bodega item in ONE call
+          // Update ALL pedidos related to this bodega item (by bodegaId OR by old proveedor+mercancia match)
           setPedidos(p=>{
             let updated=p.map(x=>{
-              if(x.bodegaId===bForm._editId){
-                // Distributed pedidos - update proveedor, mercancia, unitario
-                return {...x,proveedor:bForm.proveedor,mercancia:bForm.mercancia,unitario,costo:x.cant*unitario,fecha};
+              // Match by bodegaId (new data) OR by pedidoProvId (pending stock pedido)
+              const isDistributed=x.bodegaId===bForm._editId;
+              const isPending=x.id===existing.pedidoProvId;
+              // Also catch old distributed pedidos that may not have bodegaId but match proveedor+mercancia+bodegaId via distribuciones
+              const distIds=(existing.distribuciones||[]).map(d=>d.pedidoId);
+              const isOldDist=distIds.includes(x.id);
+              if(isDistributed||isOldDist){
+                return {...x,proveedor:bForm.proveedor,mercancia:bForm.mercancia,unitario,costo:x.cant*unitario,bodegaId:bForm._editId};
               }
-              if(x.id===existing.pedidoProvId){
-                // Pending bodega pedido
-                if(pendientes<=0) return null; // mark for removal
+              if(isPending){
+                if(pendientes<=0) return null;
                 return {...x,cant:pendientes,unitario,costo:pendientes*unitario,mercancia:bForm.mercancia,proveedor:bForm.proveedor,fecha};
               }
               return x;
             }).filter(Boolean);
-            // If pendientes>0 and pedidoProvId didn't exist, nothing extra needed
             return updated;
           });
         } else {
