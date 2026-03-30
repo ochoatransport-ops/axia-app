@@ -406,7 +406,6 @@ function EstadoCuentaModal({nombre,pedidos,abonosCli,flujo,onClose,fmt,C,inp,btn
   .footer{margin-top:48px;padding-top:16px;border-top:1px solid #e2e8f0;display:flex;justify-content:space-between;font-size:11px;color:#94a3b8}
   @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
 </style>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head><body><div class="page">
 
 
@@ -599,29 +598,25 @@ function EstadoCuentaModal({nombre,pedidos,abonosCli,flujo,onClose,fmt,C,inp,btn
           {/* Excel export */}
           <div style={{padding:"16px 0 0",borderTop:"1px solid #f5f5f4",marginTop:16}}>
             <button onClick={()=>{
-              const wb=XLSX.utils.book_new();
-              const ws=XLSX.utils.aoa_to_sheet([
-                [`Estado de Cuenta — ${nombre}`,"","","","",""],
-                ["Fecha:",new Date().toLocaleDateString("es-MX"),"","","",""],
-                ["","","","","",""],
-                ["RESUMEN","","","","",""],
-                ["Total pedidos",totalPedidos,"","Total abonado",totalAbonado,""],
-                ["Saldo pendiente",saldo,"","","",""],
-                ["","","","","",""],
-                ["PEDIDOS","","","","",""],
-                ["Folio","Mercancía","Cantidad","Precio Unit.","Total","Estado"],
+              const rows=[
+                [`Estado de Cuenta — Cliente: ${nombre}`],
+                [`Fecha: ${new Date().toLocaleDateString("es-MX")}`],
+                [],
+                ["RESUMEN"],
+                ["Total Vendido",totalPedidos,"Total Recibido",totalAbonado,"Saldo Pendiente",saldo],
+                [],
+                ["PEDIDOS"],
+                ["Folio","Mercancía","Cantidad","Precio Unit.","Total Venta","Estado"],
                 ...misPedidos.map(p=>[p.id,p.mercancia,p.cant,p.precioPublico||0,p.total||0,p.clientePago||"Pendiente"]),
-                ["","","","TOTAL",totalPedidos,""],
-                ["","","","","",""],
-                ["PAGOS RECIBIDOS","","","","",""],
-                ["Fecha","Nota","Monto","","",""],
-                ...misAbonos.map(a=>[a.fecha,a.nota||"",a.monto,"","",""]),
-                ["TOTAL ABONADO","","",totalAbonado,"",""],
-              ]);
-              ws['!cols']=[{wch:12},{wch:35},{wch:10},{wch:14},{wch:14},{wch:22}];
-              XLSX.utils.book_append_sheet(wb,ws,"Estado de Cuenta");
-              XLSX.writeFile(wb,`Estado_Cliente_${nombre.replace(/\s+/g,"_")}_${new Date().toISOString().slice(0,10)}.xlsx`);
-            }} style={{width:"100%",padding:"10px 0",background:"#16a34a",border:"none",borderRadius:10,color:"#fff",cursor:"pointer",fontWeight:600,fontFamily:"'Outfit',sans-serif",fontSize:13}}>📊 Exportar Excel</button>
+                ["TOTAL","","","",totalPedidos,""],
+                [],
+                ["PAGOS RECIBIDOS"],
+                ["Fecha","Nota","Monto"],
+                ...misAbonos.map(a=>[a.fecha,a.nota||"",a.monto]),
+                ["TOTAL RECIBIDO","",totalAbonado],
+              ];
+              downloadCSV(`Estado_Cliente_${nombre.replace(/\s+/g,"_")}_${new Date().toISOString().slice(0,10)}.csv`,rows);
+            }} style={{width:"100%",padding:"10px 0",background:"#16a34a",border:"none",borderRadius:10,color:"#fff",cursor:"pointer",fontWeight:600,fontFamily:"'Outfit',sans-serif",fontSize:13}}>📊 Exportar CSV</button>
           </div>
         </div>
       </div>
@@ -684,8 +679,7 @@ function EstadoCuentaProveedorModal({nombre,pedidos,abonosProv,onClose,fmt,C,inp
       th{font-size:10px;font-weight:700;color:#a8a29e;text-transform:uppercase;letter-spacing:.06em;padding:8px;border-bottom:2px solid #e7e5e4;text-align:left}
       td{padding:8px;border-bottom:1px solid #f5f5f4;font-size:12px}
       h2{font-size:13px;font-weight:700;color:#a8a29e;text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px}
-    </style><script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-</head><body>
+    </style></head><body>
       <h1>${nombre}</h1>
       <div style="color:#a8a29e;font-size:12px;margin-top:4px">Estado de cuenta proveedor · ${periodoLabel} · ${fechaDoc}</div>
       <div class="hero">
@@ -796,41 +790,44 @@ function EstadoCuentaProveedorModal({nombre,pedidos,abonosProv,onClose,fmt,C,inp
       <div style={{display:"flex",gap:10,marginTop:20,paddingTop:16,borderTop:"1px solid #f5f5f4"}}>
         <button onClick={descargarPDF} style={{...btnP,flex:1}}>🖨️ Imprimir / PDF</button>
         <button onClick={()=>{
-          const wb=XLSX.utils.book_new();
-          // Resumen sheet
-          const resumen=[
-            ["Estado de Cuenta Proveedor","",""],
-            ["Proveedor:",nombre,""],
-            ["Fecha:",new Date().toLocaleDateString("es-MX"),""],
-            ["","",""],
-            ["RESUMEN","",""],
-            ["Total Comprado",totalComprado,""],
-            ["Total Abonado",totalAbonado,""],
-            ["Saldo Pendiente",saldo,""],
-            ["","",""],
-          ];
-          const wsPedidos=XLSX.utils.aoa_to_sheet([
-            ...resumen,
-            ["PEDIDOS","","","",""],
+          const fecha=new Date().toLocaleDateString("es-MX");
+          const rows=[
+            [`Estado de Cuenta — Proveedor: ${nombre}`],
+            [`Fecha: ${fecha}`],
+            [],
+            ["RESUMEN"],
+            ["Total Comprado",totalComprado,"Total Abonado",totalAbonado,"Saldo",saldo],
+            [],
+            ["PEDIDOS"],
             ["Fecha","Mercancía","Cantidad","Costo Total","Estado Cliente"],
             ...misPedidos.map(p=>[p.fecha,p.mercancia,p.cant,p.costo+(p.otroCosto||0),p.clientePago||"Pendiente"]),
-            ["","","","",""],
             ["TOTAL","",misPedidos.reduce((s,p)=>s+p.cant,0),totalComprado,""],
-            ["","","","",""],
-            ["PAGOS REALIZADOS","","","",""],
-            ["Fecha","Nota","Monto","",""],
-            ...misAbonos.map(a=>[a.fecha,a.nota||"",a.monto,"",""]),
-            ["TOTAL ABONADO","","",totalAbonado,""],
-          ]);
-          wsPedidos['!cols']=[{wch:14},{wch:35},{wch:10},{wch:15},{wch:20}];
-          XLSX.utils.book_append_sheet(wb,wsPedidos,"Estado de Cuenta");
-          XLSX.writeFile(wb,`Estado_Proveedor_${nombre.replace(/\s+/g,"_")}_${new Date().toISOString().slice(0,10)}.xlsx`);
-        }} style={{flex:1,padding:"10px 0",background:"#16a34a",border:"none",borderRadius:10,color:"#fff",cursor:"pointer",fontWeight:600,fontFamily:"'Outfit',sans-serif"}}>📊 Exportar Excel</button>
+            [],
+            ["PAGOS REALIZADOS"],
+            ["Fecha","Nota","Monto"],
+            ...misAbonos.map(a=>[a.fecha,a.nota||"",a.monto]),
+            ["TOTAL ABONADO","",totalAbonado],
+          ];
+          downloadCSV(`Estado_Proveedor_${nombre.replace(/\s+/g,"_")}_${new Date().toISOString().slice(0,10)}.csv`,rows);
+        }} style={{flex:1,padding:"10px 0",background:"#16a34a",border:"none",borderRadius:10,color:"#fff",cursor:"pointer",fontWeight:600,fontFamily:"'Outfit',sans-serif"}}>📊 Exportar CSV</button>
         <button onClick={onClose} style={{flex:1,padding:"10px 0",background:"#f5f5f4",border:"1px solid #e7e5e4",borderRadius:10,color:"#44403c",cursor:"pointer",fontFamily:"'Outfit',sans-serif",fontWeight:500}}>Cerrar</button>
       </div>
     </Modal>
   );
 }
+
+const downloadCSV=(filename,rows)=>{
+  const escape=v=>{
+    const s=String(v==null?"":v);
+    return s.includes(",")||s.includes('"')||s.includes("\n")?`"${s.replace(/"/g,'""')}"`:s;
+  };
+  const csv=rows.map(r=>r.map(escape).join(",")).join("\n");
+  const blob=new Blob(["\uFEFF"+csv],{type:"text/csv;charset=utf-8"});
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(blob);
+  a.download=filename;
+  a.click();
+};
 
 function Axia(){
   const [tab,setTab]=useState(0);
@@ -1716,6 +1713,20 @@ function Axia(){
                   }
                 }} style={{flex:2,padding:"10px 0",background:"#1c1917",border:"none",borderRadius:10,color:"#fff",cursor:"pointer",fontWeight:600,fontFamily:"'Outfit',sans-serif"}}>Importar y recargar</button>
               </div>
+              <div style={{marginTop:16,paddingTop:16,borderTop:"1px solid #f5f5f4"}}>
+                <div style={{fontSize:12,color:"#a8a29e",marginBottom:8,fontFamily:"'Outfit',sans-serif"}}>🔧 ¿Pedidos con proveedor incorrecto? Sincroniza los pedidos de bodega con su proveedor actual:</div>
+                <button onClick={()=>{
+                  // Fix: for each bodega item, update all linked pedidos to use correct proveedor
+                  setPedidos(prev=>prev.map(ped=>{
+                    if(!ped.bodegaId) return ped;
+                    const bod=bodega.find(b=>b.id===ped.bodegaId);
+                    if(!bod) return ped;
+                    if(ped.proveedor===bod.proveedor&&ped.mercancia===bod.mercancia) return ped;
+                    return {...ped,proveedor:bod.proveedor,mercancia:bod.mercancia,unitario:bod.unitario,costo:ped.cant*bod.unitario};
+                  }));
+                  alert('✅ Pedidos sincronizados con sus entradas de bodega.');
+                }} style={{width:"100%",padding:"9px 0",background:"#d97706",border:"none",borderRadius:10,color:"#fff",fontSize:13,cursor:"pointer",fontWeight:600,fontFamily:"'Outfit',sans-serif"}}>🔧 Sincronizar pedidos con bodega</button>
+              </div>
             </div>
           </div>
         </div>
@@ -2040,18 +2051,23 @@ function Axia(){
           const existing=bodega.find(b=>b.id===bForm._editId);
           const pendientes=cant-(existing.distribuciones||[]).reduce((s,d)=>s+d.cant,0);
           setBodega(p=>p.map(b=>b.id===bForm._editId?{...b,fecha,proveedor:bForm.proveedor,mercancia:bForm.mercancia,cant,unitario,costoTotal:cant*unitario,notas:bForm.notas||""}:b));
-          // Update proveedor on ALL pedidos related to this bodega item (distributed + pending)
-          const distPedIds=(existing.distribuciones||[]).map(d=>d.pedidoId);
-          setPedidos(p=>p.map(x=>{
-            if(x.bodegaId===bForm._editId){
-              return {...x,proveedor:bForm.proveedor,mercancia:bForm.mercancia,unitario,fecha};
-            }
-            return x;
-          }));
-          if(existing.pedidoProvId){
-            if(pendientes<=0){setPedidos(p=>p.filter(x=>x.id!==existing.pedidoProvId));}
-            else{setPedidos(p=>p.map(x=>x.id===existing.pedidoProvId?{...x,cant:pendientes,unitario,costo:pendientes*unitario,mercancia:bForm.mercancia,proveedor:bForm.proveedor,fecha}:x));}
-          }
+          // Update ALL pedidos related to this bodega item in ONE call
+          setPedidos(p=>{
+            let updated=p.map(x=>{
+              if(x.bodegaId===bForm._editId){
+                // Distributed pedidos - update proveedor, mercancia, unitario
+                return {...x,proveedor:bForm.proveedor,mercancia:bForm.mercancia,unitario,costo:x.cant*unitario,fecha};
+              }
+              if(x.id===existing.pedidoProvId){
+                // Pending bodega pedido
+                if(pendientes<=0) return null; // mark for removal
+                return {...x,cant:pendientes,unitario,costo:pendientes*unitario,mercancia:bForm.mercancia,proveedor:bForm.proveedor,fecha};
+              }
+              return x;
+            }).filter(Boolean);
+            // If pendientes>0 and pedidoProvId didn't exist, nothing extra needed
+            return updated;
+          });
         } else {
           const boId=`bo${Date.now()}`;
           const pedId=nextFolio;
@@ -2156,6 +2172,20 @@ function Axia(){
                     alert('❌ JSON inválido. Verifica que copiaste todo el contenido.');
                   }
                 }} style={{flex:2,padding:"10px 0",background:"#1c1917",border:"none",borderRadius:10,color:"#fff",cursor:"pointer",fontWeight:600,fontFamily:"'Outfit',sans-serif"}}>Importar y recargar</button>
+              </div>
+              <div style={{marginTop:16,paddingTop:16,borderTop:"1px solid #f5f5f4"}}>
+                <div style={{fontSize:12,color:"#a8a29e",marginBottom:8,fontFamily:"'Outfit',sans-serif"}}>🔧 ¿Pedidos con proveedor incorrecto? Sincroniza los pedidos de bodega con su proveedor actual:</div>
+                <button onClick={()=>{
+                  // Fix: for each bodega item, update all linked pedidos to use correct proveedor
+                  setPedidos(prev=>prev.map(ped=>{
+                    if(!ped.bodegaId) return ped;
+                    const bod=bodega.find(b=>b.id===ped.bodegaId);
+                    if(!bod) return ped;
+                    if(ped.proveedor===bod.proveedor&&ped.mercancia===bod.mercancia) return ped;
+                    return {...ped,proveedor:bod.proveedor,mercancia:bod.mercancia,unitario:bod.unitario,costo:ped.cant*bod.unitario};
+                  }));
+                  alert('✅ Pedidos sincronizados con sus entradas de bodega.');
+                }} style={{width:"100%",padding:"9px 0",background:"#d97706",border:"none",borderRadius:10,color:"#fff",fontSize:13,cursor:"pointer",fontWeight:600,fontFamily:"'Outfit',sans-serif"}}>🔧 Sincronizar pedidos con bodega</button>
               </div>
             </div>
           </div>
@@ -2297,6 +2327,20 @@ function Axia(){
                     alert('❌ JSON inválido. Verifica que copiaste todo el contenido.');
                   }
                 }} style={{flex:2,padding:"10px 0",background:"#1c1917",border:"none",borderRadius:10,color:"#fff",cursor:"pointer",fontWeight:600,fontFamily:"'Outfit',sans-serif"}}>Importar y recargar</button>
+              </div>
+              <div style={{marginTop:16,paddingTop:16,borderTop:"1px solid #f5f5f4"}}>
+                <div style={{fontSize:12,color:"#a8a29e",marginBottom:8,fontFamily:"'Outfit',sans-serif"}}>🔧 ¿Pedidos con proveedor incorrecto? Sincroniza los pedidos de bodega con su proveedor actual:</div>
+                <button onClick={()=>{
+                  // Fix: for each bodega item, update all linked pedidos to use correct proveedor
+                  setPedidos(prev=>prev.map(ped=>{
+                    if(!ped.bodegaId) return ped;
+                    const bod=bodega.find(b=>b.id===ped.bodegaId);
+                    if(!bod) return ped;
+                    if(ped.proveedor===bod.proveedor&&ped.mercancia===bod.mercancia) return ped;
+                    return {...ped,proveedor:bod.proveedor,mercancia:bod.mercancia,unitario:bod.unitario,costo:ped.cant*bod.unitario};
+                  }));
+                  alert('✅ Pedidos sincronizados con sus entradas de bodega.');
+                }} style={{width:"100%",padding:"9px 0",background:"#d97706",border:"none",borderRadius:10,color:"#fff",fontSize:13,cursor:"pointer",fontWeight:600,fontFamily:"'Outfit',sans-serif"}}>🔧 Sincronizar pedidos con bodega</button>
               </div>
             </div>
           </div>
