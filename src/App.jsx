@@ -1945,7 +1945,7 @@ function Axia(){
                         {/* Acciones */}
                         <div style={{padding:"14px 24px",borderTop:"1px solid #f5f5f4",display:"flex",gap:10,flexWrap:"wrap"}}>
                           <button onClick={e=>{e.stopPropagation();setBForm({fecha:item.fecha,proveedor:item.proveedor,mercancia:item.mercancia,cant:item.cant,unitario:item.unitario,notas:item.notas||"",_editId:item.id});setModalBodega("edit");}} style={{padding:"9px 18px",background:"#f5f5f4",border:"1px solid #e7e5e4",borderRadius:10,color:"#44403c",fontSize:13,cursor:"pointer",fontFamily:"'Outfit',sans-serif"}}>✏️ Editar</button>
-                          {dsp>0&&<button onClick={e=>{e.stopPropagation();setModalDist(item.id);setDForm({fecha:new Date().toISOString().slice(0,10),cliente:clientes[0]?.nombre||""});}} style={{padding:"9px 18px",background:"#1c1917",border:"none",borderRadius:10,color:"#fff",fontSize:13,cursor:"pointer",fontWeight:600,fontFamily:"'Outfit',sans-serif"}}>+ Distribuir ({dsp} disp.)</button>}
+                          {dsp>0&&<button onClick={e=>{e.stopPropagation();setModalDist(item.id);setDForm({fecha:new Date().toISOString().slice(0,10),cliente:clientes[0]?.nombre||""});}} style={{padding:"9px 18px",background:"#1c1917",border:"none",borderRadius:10,color:"#fff",fontSize:13,cursor:"pointer",fontWeight:600,fontFamily:"'Outfit',sans-serif"}}>📦 Distribuir ({dsp} disponibles)</button>}
                           <button onClick={e=>{e.stopPropagation();setModalMerma({bodegaId:item.id,id:null,cant:"",tipo:"",nota:""});}} style={{padding:"9px 18px",background:"#fff7ed",border:"1px solid #fed7aa",borderRadius:10,color:"#92400e",fontSize:13,cursor:"pointer",fontFamily:"'Outfit',sans-serif"}}>+ Merma</button>
                           <button onClick={e=>{e.stopPropagation();if(!confirm("¿Eliminar?"))return;setBodega(p=>p.filter(b=>b.id!==item.id));setPedidos(p=>p.filter(x=>x.id!==item.pedidoProvId&&!(item.distribuciones||[]).find(d=>d.pedidoId===x.id)));}} style={{padding:"9px 18px",background:"#fff1f2",border:"1px solid #fecdd3",borderRadius:10,color:"#e11d48",fontSize:13,cursor:"pointer",fontFamily:"'Outfit',sans-serif"}}>🗑</button>
                         </div>
@@ -2386,8 +2386,10 @@ function Axia(){
         <Field label="Nota"><input value={dForm.nota||""} onChange={e=>setDForm(f=>({...f,nota:e.target.value}))} style={inp}/></Field>
         <button onClick={()=>{
           const cant=Number(dForm.cant)||0,precio=Number(dForm.precio)||0;
-          if(!dForm.cliente||!cant)return;
-          if(cant>dsp){alert(`Solo quedan ${dsp} unidades`);return;}
+          if(!dForm.cliente){alert('Selecciona un cliente');return;}
+          if(!cant||cant<=0){alert('Ingresa una cantidad válida');return;}
+          if(!precio||precio<=0){alert('Ingresa un precio de venta');return;}
+          if(cant>dsp){alert(`Solo quedan ${dsp} unidades disponibles`);return;}
           const pedId=nextFolio;
           setPedidos(prev=>[...prev,{id:pedId,proveedor:item.proveedor,cliente:dForm.cliente,mercancia:item.mercancia,cant,unitario:item.unitario,otroCosto:0,precioPublico:precio,costo:cant*item.unitario,total:cant*precio,fecha:dForm.fecha||new Date().toISOString().slice(0,10),vendedor:"",clientePago:"",recibido:"",pagadoProveedor:"",bodegaId:item.id}]);
           setNextFolio(pedId+1);
@@ -2399,7 +2401,7 @@ function Axia(){
           }
           setBodega(p=>p.map(b=>b.id===modalDist?{...b,distribuciones:[...(b.distribuciones||[]),{id:`dist${Date.now()}`,pedidoId:pedId,cliente:dForm.cliente,cant,precio,total:cant*precio,fecha:dForm.fecha||new Date().toISOString().slice(0,10),nota:dForm.nota||""}]}:b));
           setModalDist(null);setDForm({});
-        }} style={{...btnP,width:"100%",padding:"9px 0",fontSize:13,marginTop:4}}>Asignar a {dForm.cliente||"cliente"}</button>
+        }} style={{...btnP,width:"100%",padding:"10px 0",fontSize:13,marginTop:4}}>✅ Asignar {dForm.cant||"?"} uds a {dForm.cliente||"— selecciona cliente —"}</button>
       </div>
       <div style={{padding:14,border:`1px solid #fde68a`,borderRadius:10,background:"#fffbeb"}}>
         <div style={{fontWeight:700,color:C.yellow,fontSize:13,marginBottom:10}}>⚠️ Registrar merma</div>
