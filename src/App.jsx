@@ -1,8 +1,5 @@
+
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import ReactDOM from 'react-dom/client';
-
-
-// hooks imported above
 
 window.storage = {
   get: (key) => {
@@ -779,6 +776,8 @@ function Axia(){
   const [seccion,setSeccion]=useState(null);
   const [adminTab,setAdminTab]=useState('resumen');
   const [provOpenMap,setProvOpenMap]=useState({});
+  const [modalImport,setModalImport]=useState(false);
+  const [importJson,setImportJson]=useState('');
   const [modalEstadoProv,setModalEstadoProv]=useState(null);
   const [modalMerma,setModalMerma]=useState(null);
   const [bSort,setBSort]=useState('ultimoMod');
@@ -1013,6 +1012,19 @@ function Axia(){
           <div style={{fontSize:15,fontWeight:700,color:"#1c1917",letterSpacing:"-0.3px",fontFamily:"'Outfit',sans-serif",lineHeight:1}}>AXIA</div>
           <div style={{fontSize:9,color:"#a8a29e",letterSpacing:"0.15em",textTransform:"uppercase",fontFamily:"'Outfit',sans-serif"}}>Distribution & Supply</div>
         </button>
+        <div style={{display:"flex",gap:6,marginLeft:"auto",marginRight:16}}>
+          <button onClick={()=>{
+            const keys=['axia-pedidos','axia-aprov','axia-acli','axia-clientes','axia-proveedores','axia-vendedores','axia-bodega','axia-flujo','axia-folio'];
+            const data={};
+            keys.forEach(k=>{const v=localStorage.getItem(k);if(v)data[k]=v;});
+            const blob=new Blob([JSON.stringify(data)],{type:'application/json'});
+            const a=document.createElement('a');
+            a.href=URL.createObjectURL(blob);
+            a.download='axia-backup-'+new Date().toISOString().slice(0,10)+'.json';
+            a.click();
+          }} style={{padding:"6px 12px",border:"1px solid #e7e5e4",borderRadius:8,background:"#f5f5f4",color:"#44403c",fontSize:12,cursor:"pointer",fontFamily:"'Outfit',sans-serif"}}>⬇ Exportar</button>
+          <button onClick={()=>setModalImport(true)} style={{padding:"6px 12px",border:"1px solid #e7e5e4",borderRadius:8,background:"#f5f5f4",color:"#44403c",fontSize:12,cursor:"pointer",fontFamily:"'Outfit',sans-serif"}}>⬆ Importar</button>
+        </div>
         <div style={{display:"flex",gap:2}}>
           {[
             {key:"Clientes",icon:"👥",t:2},
@@ -1613,7 +1625,42 @@ function Axia(){
           )}
         </>)}
 
-        {modalEstadoProv&&<EstadoCuentaProveedorModal nombre={modalEstadoProv} pedidos={pedidos} abonosProv={abonosProv} onClose={()=>setModalEstadoProv(null)} fmt={fmt} C={C} inp={inp} btnP={btnP}/>}
+        {modalImport&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.25)",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center"}}>
+          <div style={{background:"#fff",border:"1px solid #e7e5e4",borderRadius:16,width:"min(520px,95vw)",boxShadow:"0 8px 40px rgba(0,0,0,0.12)"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"20px 24px",borderBottom:"1px solid #f5f5f4"}}>
+              <div style={{fontFamily:"'Outfit',sans-serif",fontSize:16,fontWeight:700,color:"#1c1917"}}>⬆ Importar datos</div>
+              <button onClick={()=>{setModalImport(false);setImportJson('');}} style={{background:"#f5f5f4",border:"1px solid #e7e5e4",borderRadius:8,color:"#78716c",fontSize:16,cursor:"pointer",width:32,height:32,display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
+            </div>
+            <div style={{padding:"20px 24px"}}>
+              <div style={{fontSize:13,color:"#78716c",fontFamily:"'Outfit',sans-serif",marginBottom:12}}>Pega aquí el JSON exportado desde el HTML local:</div>
+              <textarea
+                value={importJson}
+                onChange={e=>setImportJson(e.target.value)}
+                placeholder='{"axia-pedidos":"[...]","axia-clientes":"[...]",...}'
+                style={{width:"100%",height:160,border:"1px solid #e7e5e4",borderRadius:8,padding:"10px 12px",fontSize:12,fontFamily:"monospace",color:"#1c1917",outline:"none",resize:"vertical"}}
+              />
+              <div style={{display:"flex",gap:10,marginTop:16}}>
+                <button onClick={()=>{setModalImport(false);setImportJson('');}} style={{flex:1,padding:"10px 0",background:"#f5f5f4",border:"1px solid #e7e5e4",borderRadius:10,color:"#44403c",cursor:"pointer",fontFamily:"'Outfit',sans-serif"}}>Cancelar</button>
+                <button onClick={()=>{
+                  try{
+                    const data=JSON.parse(importJson);
+                    Object.entries(data).forEach(([k,v])=>localStorage.setItem(k,v));
+                    setModalImport(false);
+                    setImportJson('');
+                    alert('✅ Datos importados. La página se recargará.');
+                    location.reload();
+                  }catch(e){
+                    alert('❌ JSON inválido. Verifica que copiaste todo el contenido.');
+                  }
+                }} style={{flex:2,padding:"10px 0",background:"#1c1917",border:"none",borderRadius:10,color:"#fff",cursor:"pointer",fontWeight:600,fontFamily:"'Outfit',sans-serif"}}>Importar y recargar</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {modalEstadoProv&&<EstadoCuentaProveedorModal nombre={modalEstadoProv} pedidos={pedidos} abonosProv={abonosProv} onClose={()=>setModalEstadoProv(null)} fmt={fmt} C={C} inp={inp} btnP={btnP}/>}
 
       {modalDistribuir&&<DistribuirPagosModal nombre={modalDistribuir} pedidos={pedidos} abonosCli={abonosCli} setPedidos={setPedidos} onClose={()=>setModalDistribuir(null)} fmt={fmt} C={C} inp={inp} btnP={btnP}/>}
 
@@ -2011,7 +2058,42 @@ function Axia(){
   );
 })()}
 
-{modalEstadoProv&&<EstadoCuentaProveedorModal nombre={modalEstadoProv} pedidos={pedidos} abonosProv={abonosProv} onClose={()=>setModalEstadoProv(null)} fmt={fmt} C={C} inp={inp} btnP={btnP}/>}
+{modalImport&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.25)",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center"}}>
+          <div style={{background:"#fff",border:"1px solid #e7e5e4",borderRadius:16,width:"min(520px,95vw)",boxShadow:"0 8px 40px rgba(0,0,0,0.12)"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"20px 24px",borderBottom:"1px solid #f5f5f4"}}>
+              <div style={{fontFamily:"'Outfit',sans-serif",fontSize:16,fontWeight:700,color:"#1c1917"}}>⬆ Importar datos</div>
+              <button onClick={()=>{setModalImport(false);setImportJson('');}} style={{background:"#f5f5f4",border:"1px solid #e7e5e4",borderRadius:8,color:"#78716c",fontSize:16,cursor:"pointer",width:32,height:32,display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
+            </div>
+            <div style={{padding:"20px 24px"}}>
+              <div style={{fontSize:13,color:"#78716c",fontFamily:"'Outfit',sans-serif",marginBottom:12}}>Pega aquí el JSON exportado desde el HTML local:</div>
+              <textarea
+                value={importJson}
+                onChange={e=>setImportJson(e.target.value)}
+                placeholder='{"axia-pedidos":"[...]","axia-clientes":"[...]",...}'
+                style={{width:"100%",height:160,border:"1px solid #e7e5e4",borderRadius:8,padding:"10px 12px",fontSize:12,fontFamily:"monospace",color:"#1c1917",outline:"none",resize:"vertical"}}
+              />
+              <div style={{display:"flex",gap:10,marginTop:16}}>
+                <button onClick={()=>{setModalImport(false);setImportJson('');}} style={{flex:1,padding:"10px 0",background:"#f5f5f4",border:"1px solid #e7e5e4",borderRadius:10,color:"#44403c",cursor:"pointer",fontFamily:"'Outfit',sans-serif"}}>Cancelar</button>
+                <button onClick={()=>{
+                  try{
+                    const data=JSON.parse(importJson);
+                    Object.entries(data).forEach(([k,v])=>localStorage.setItem(k,v));
+                    setModalImport(false);
+                    setImportJson('');
+                    alert('✅ Datos importados. La página se recargará.');
+                    location.reload();
+                  }catch(e){
+                    alert('❌ JSON inválido. Verifica que copiaste todo el contenido.');
+                  }
+                }} style={{flex:2,padding:"10px 0",background:"#1c1917",border:"none",borderRadius:10,color:"#fff",cursor:"pointer",fontWeight:600,fontFamily:"'Outfit',sans-serif"}}>Importar y recargar</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {modalEstadoProv&&<EstadoCuentaProveedorModal nombre={modalEstadoProv} pedidos={pedidos} abonosProv={abonosProv} onClose={()=>setModalEstadoProv(null)} fmt={fmt} C={C} inp={inp} btnP={btnP}/>}
 
       {modalDistribuir&&<DistribuirPagosModal nombre={modalDistribuir} pedidos={pedidos} abonosCli={abonosCli} setPedidos={setPedidos} onClose={()=>setModalDistribuir(null)} fmt={fmt} C={C} inp={inp} btnP={btnP}/>}
 
@@ -2117,6 +2199,41 @@ function Axia(){
           </div>
         </div>
       )}
+      {modalImport&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.25)",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center"}}>
+          <div style={{background:"#fff",border:"1px solid #e7e5e4",borderRadius:16,width:"min(520px,95vw)",boxShadow:"0 8px 40px rgba(0,0,0,0.12)"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"20px 24px",borderBottom:"1px solid #f5f5f4"}}>
+              <div style={{fontFamily:"'Outfit',sans-serif",fontSize:16,fontWeight:700,color:"#1c1917"}}>⬆ Importar datos</div>
+              <button onClick={()=>{setModalImport(false);setImportJson('');}} style={{background:"#f5f5f4",border:"1px solid #e7e5e4",borderRadius:8,color:"#78716c",fontSize:16,cursor:"pointer",width:32,height:32,display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
+            </div>
+            <div style={{padding:"20px 24px"}}>
+              <div style={{fontSize:13,color:"#78716c",fontFamily:"'Outfit',sans-serif",marginBottom:12}}>Pega aquí el JSON exportado desde el HTML local:</div>
+              <textarea
+                value={importJson}
+                onChange={e=>setImportJson(e.target.value)}
+                placeholder='{"axia-pedidos":"[...]","axia-clientes":"[...]",...}'
+                style={{width:"100%",height:160,border:"1px solid #e7e5e4",borderRadius:8,padding:"10px 12px",fontSize:12,fontFamily:"monospace",color:"#1c1917",outline:"none",resize:"vertical"}}
+              />
+              <div style={{display:"flex",gap:10,marginTop:16}}>
+                <button onClick={()=>{setModalImport(false);setImportJson('');}} style={{flex:1,padding:"10px 0",background:"#f5f5f4",border:"1px solid #e7e5e4",borderRadius:10,color:"#44403c",cursor:"pointer",fontFamily:"'Outfit',sans-serif"}}>Cancelar</button>
+                <button onClick={()=>{
+                  try{
+                    const data=JSON.parse(importJson);
+                    Object.entries(data).forEach(([k,v])=>localStorage.setItem(k,v));
+                    setModalImport(false);
+                    setImportJson('');
+                    alert('✅ Datos importados. La página se recargará.');
+                    location.reload();
+                  }catch(e){
+                    alert('❌ JSON inválido. Verifica que copiaste todo el contenido.');
+                  }
+                }} style={{flex:2,padding:"10px 0",background:"#1c1917",border:"none",borderRadius:10,color:"#fff",cursor:"pointer",fontWeight:600,fontFamily:"'Outfit',sans-serif"}}>Importar y recargar</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {modalEstadoProv&&<EstadoCuentaProveedorModal nombre={modalEstadoProv} pedidos={pedidos} abonosProv={abonosProv} onClose={()=>setModalEstadoProv(null)} fmt={fmt} C={C} inp={inp} btnP={btnP}/>}
 
       {modalDistribuir&&<DistribuirPagosModal nombre={modalDistribuir} pedidos={pedidos} abonosCli={abonosCli} setPedidos={setPedidos} onClose={()=>setModalDistribuir(null)} fmt={fmt} C={C} inp={inp} btnP={btnP}/>}
