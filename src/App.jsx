@@ -1,13 +1,44 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import { storage } from './firebase';
+import ReactDOM from 'react-dom/client';
+
+
+// hooks imported above
+
+window.storage = {
+  get: (key) => {
+    try {
+      const v = localStorage.getItem(key);
+      return Promise.resolve(v ? {key, value: v} : null);
+    } catch(e) { return Promise.resolve(null); }
+  },
+  set: (key, value) => {
+    try {
+      const str = typeof value === 'string' ? value : JSON.stringify(value);
+      localStorage.setItem(key, str);
+      return Promise.resolve({key, value: str});
+    } catch(e) { return Promise.resolve(null); }
+  },
+  delete: (key) => {
+    try { localStorage.removeItem(key); return Promise.resolve({key, deleted:true}); }
+    catch(e) { return Promise.resolve(null); }
+  },
+  list: (prefix) => {
+    try {
+      const keys = Object.keys(localStorage).filter(k => !prefix || k.startsWith(prefix));
+      return Promise.resolve({keys});
+    } catch(e) { return Promise.resolve({keys:[]}); }
+  }
+}
+
 
 
 const C = {
-  bg:"#f4f4f5", surface:"#ffffff", card:"#ffffff",
-  border:"#e4e4e7", border2:"#d4d4d8",
-  accent:"#18181b", accent2:"#27272a", accent3:"#52525b",
-  text:"#09090b", textMid:"#3f3f46", textDim:"#9ca3af",
-  green:"#16a34a", yellow:"#d97706", red:"#dc2626", blue:"#2563eb",
+  bg:"#f5f5f4", surface:"#ffffff", card:"#ffffff",
+  border:"#e7e5e4", border2:"#d6d3d1",
+  accent:"#1c1917", accent2:"#44403c", accent3:"#78716c",
+  text:"#1c1917", textMid:"#44403c", textDim:"#a8a29e",
+  green:"#16a34a", red:"#dc2626", yellow:"#d97706", blue:"#2563eb",
+  font:"'Outfit',sans-serif",
 };
 
 const CLIENTES_INIT = [];
@@ -23,16 +54,8 @@ const gColor=v=>v>0?"#16a34a":v<0?"#dc2626":"#9ca3af";
 const sColor=v=>v>0?"#dc2626":v<0?"#16a34a":"#9ca3af";
 const fmt = v => new Intl.NumberFormat("es-MX",{style:"currency",currency:"USD",minimumFractionDigits:2,maximumFractionDigits:2}).format(v||0);
 
-const inp = {
-  width:"100%", background:"#f9f9f9", border:`1px solid ${C.border2}`,
-  borderRadius:8, padding:"9px 12px", color:C.text, fontSize:14,
-  fontFamily:"'DM Sans',sans-serif", outline:"none", boxSizing:"border-box"
-};
-const btnP = {
-  background:`linear-gradient(135deg,${C.accent},${C.accent3})`,
-  border:"none", borderRadius:9, color:"#fff",
-  fontFamily:"'DM Sans',sans-serif", fontWeight:600, cursor:"pointer"
-};
+const inp={width:"100%",background:"#ffffff",border:"1px solid #e7e5e4",borderRadius:8,padding:"9px 12px",fontSize:13,fontFamily:"'Outfit',sans-serif",color:"#1c1917",outline:"none"}
+const btnP={background:"#1c1917",color:"#fff",border:"none",borderRadius:10,padding:"10px 20px",cursor:"pointer",fontFamily:"'Outfit',sans-serif",fontSize:13,fontWeight:600};
 
 const sstyle = s => {
   if (!s) return {bg:"#f1f1f1",c:"#aaaaaa",label:"—"};
@@ -69,7 +92,7 @@ function AddNombreModal({title, placeholder, onSave, onClose}){
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(4px)"}}>
       <div style={{background:"#fff",borderRadius:16,width:"min(420px,92vw)",padding:28,boxShadow:"0 20px 60px rgba(0,0,0,0.4)"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
-          <h3 style={{margin:0,fontFamily:"'Sora',sans-serif",fontSize:17,color:C.text}}>{title}</h3>
+          <h3 style={{margin:0,fontFamily:"'Outfit',sans-serif",fontSize:17,color:C.text}}>{title}</h3>
           <button onClick={onClose} style={{background:"none",border:"none",fontSize:22,cursor:"pointer",color:C.textDim,lineHeight:1}}>✕</button>
         </div>
         <input
@@ -81,7 +104,7 @@ function AddNombreModal({title, placeholder, onSave, onClose}){
           onKeyDown={e=>{ if(e.key==="Enter" && val.trim()) { onSave(val.trim()); }}}
         />
         <div style={{display:"flex",gap:10}}>
-          <button onClick={onClose} style={{flex:1,padding:"10px 0",background:"transparent",border:`1px solid ${C.border2}`,borderRadius:9,color:C.textDim,fontFamily:"'DM Sans',sans-serif",cursor:"pointer",fontSize:14}}>Cancelar</button>
+          <button onClick={onClose} style={{flex:1,padding:"10px 0",background:"transparent",border:`1px solid ${C.border2}`,borderRadius:9,color:C.textDim,fontFamily:"'Outfit',sans-serif",cursor:"pointer",fontSize:14}}>Cancelar</button>
           <button
             onClick={()=>{ if(val.trim()) onSave(val.trim()); }}
             style={{...btnP,flex:2,padding:"10px 0",fontSize:14}}
@@ -94,13 +117,13 @@ function AddNombreModal({title, placeholder, onSave, onClose}){
 
 function Modal({title,onClose,children}){
   return(
-    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(3px)"}}>
-      <div style={{background:"#fff",border:`1px solid ${C.border2}`,borderRadius:16,width:"min(580px,95vw)",maxHeight:"92vh",overflowY:"auto",padding:28,boxShadow:"0 20px 60px rgba(0,0,0,0.3)"}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
-          <h3 style={{color:C.text,fontFamily:"'Sora',sans-serif",margin:0,fontSize:18}}>{title}</h3>
-          <button onClick={onClose} style={{background:"none",border:"none",color:C.textDim,fontSize:22,cursor:"pointer",lineHeight:1}}>✕</button>
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.25)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center"}}>
+      <div style={{background:"#ffffff",border:"1px solid #e7e5e4",borderRadius:16,width:"min(600px,95vw)",maxHeight:"92vh",overflowY:"auto",boxShadow:"0 8px 40px rgba(0,0,0,0.12)"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"20px 24px",borderBottom:"1px solid #f5f5f4",position:"sticky",top:0,background:"#ffffff",borderRadius:"16px 16px 0 0",zIndex:1}}>
+          <div style={{fontFamily:"'Outfit',sans-serif",fontSize:16,fontWeight:700,color:"#1c1917"}}>{title}</div>
+          <button onClick={onClose} style={{background:"#f5f5f4",border:"1px solid #e7e5e4",borderRadius:8,color:"#78716c",fontSize:16,cursor:"pointer",width:32,height:32,display:"flex",alignItems:"center",justifyContent:"center"}}> ✕</button>
         </div>
-        {children}
+        <div style={{padding:"20px 24px"}}>{children}</div>
       </div>
     </div>
   );
@@ -109,7 +132,7 @@ function Modal({title,onClose,children}){
 function Field({label,children}){
   return(
     <div style={{marginBottom:13}}>
-      <label style={{display:"block",color:C.textDim,fontSize:11,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:4,fontFamily:"'DM Sans',sans-serif"}}>{label}</label>
+      <label style={{display:"block",color:C.textDim,fontSize:11,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:4,fontFamily:"'Outfit',sans-serif"}}>{label}</label>
       {children}
     </div>
   );
@@ -149,7 +172,6 @@ function Combo({value,onChange,options,placeholder}){
 }
 
 // ── MAIN ──────────────────────────────────────────────────────────────────────
-
 function DistribuirPagosModal({nombre,pedidos,abonosCli,setPedidos,onClose,fmt,C,inp,btnP}){
   // Load existing assignments from pedidos (montoAsignado field)
   const init=()=>{
@@ -193,7 +215,7 @@ function DistribuirPagosModal({nombre,pedidos,abonosCli,setPedidos,onClose,fmt,C
       <div style={{background:"#fff",borderRadius:16,width:"100%",maxWidth:520,boxShadow:"0 8px 32px rgba(0,0,0,0.18)"}}>
         <div style={{padding:"18px 22px",background:"linear-gradient(135deg,#09090b,#27272a)",borderRadius:"16px 16px 0 0",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
           <div>
-            <div style={{fontSize:16,fontWeight:800,color:"#fff",fontFamily:"'Sora',sans-serif"}}>💸 Distribuir pagos — {nombre}</div>
+            <div style={{fontSize:16,fontWeight:800,color:"#fff",fontFamily:"'Outfit',sans-serif"}}>💸 Distribuir pagos — {nombre}</div>
             <div style={{fontSize:12,color:"rgba(255,255,255,0.6)",marginTop:2}}>Edita o borra asignaciones de pago</div>
           </div>
           <button onClick={onClose} style={{background:"rgba(255,255,255,0.15)",border:"none",borderRadius:8,padding:"5px 11px",cursor:"pointer",color:"#fff",fontSize:15}}>✕</button>
@@ -207,7 +229,7 @@ function DistribuirPagosModal({nombre,pedidos,abonosCli,setPedidos,onClose,fmt,C
           ].map(s=>(
             <div key={s.l} style={{background:"#fff",padding:"12px",textAlign:"center"}}>
               <div style={{fontSize:10,color:C.textDim,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:3}}>{s.l}</div>
-              <div style={{fontSize:16,fontWeight:800,color:s.c,fontFamily:"'Sora',sans-serif"}}>{s.v}</div>
+              <div style={{fontSize:16,fontWeight:800,color:s.c,fontFamily:"'Outfit',sans-serif"}}>{s.v}</div>
             </div>
           ))}
         </div>
@@ -460,12 +482,12 @@ function EstadoCuentaModal({nombre,pedidos,abonosCli,flujo,onClose,fmt,C,inp,btn
   };
 
   return(
-    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:500,display:"flex",alignItems:"flex-start",justifyContent:"center",padding:"20px 16px",overflowY:"auto"}} onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.25)",zIndex:500,display:"flex",alignItems:"flex-start",justifyContent:"center",padding:"20px 16px",overflowY:"auto"}} onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
       <div style={{background:"#fff",borderRadius:16,width:"100%",maxWidth:640,boxShadow:"0 8px 32px rgba(0,0,0,0.18)"}}>
         {/* Header */}
         <div style={{padding:"20px 24px",background:"linear-gradient(135deg,#09090b,#27272a)",borderRadius:"16px 16px 0 0",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
           <div>
-            <div style={{fontSize:18,fontWeight:800,color:"#fff",fontFamily:"'Sora',sans-serif"}}>{nombre}</div>
+            <div style={{fontSize:18,fontWeight:800,color:"#fff",fontFamily:"'Outfit',sans-serif"}}>{nombre}</div>
             <div style={{fontSize:12,color:"rgba(255,255,255,0.6)",marginTop:2}}>Estado de cuenta</div>
           </div>
           <div style={{display:"flex",gap:8,alignItems:"center"}}>
@@ -512,7 +534,7 @@ function EstadoCuentaModal({nombre,pedidos,abonosCli,flujo,onClose,fmt,C,inp,btn
           ].map(s=>(
             <div key={s.l} style={{background:"#fff",padding:"16px",textAlign:"center"}}>
               <div style={{fontSize:10,color:C.textDim,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:4}}>{s.l}</div>
-              <div style={{fontSize:18,fontWeight:800,color:s.c,fontFamily:"'Sora',sans-serif"}}>{s.v}</div>
+              <div style={{fontSize:18,fontWeight:800,color:s.c,fontFamily:"'Outfit',sans-serif"}}>{s.v}</div>
             </div>
           ))}
         </div>
@@ -584,9 +606,184 @@ function EstadoCuentaModal({nombre,pedidos,abonosCli,flujo,onClose,fmt,C,inp,btn
 
 
 
+function EstadoCuentaProveedorModal({nombre,pedidos,abonosProv,onClose,fmt,C,inp,btnP}){
+  const [pdfPeriodo,setPdfPeriodo]=React.useState("todo");
+  const [pdfAnio,setPdfAnio]=React.useState(new Date().getFullYear().toString());
+  const [pdfMes,setPdfMes]=React.useState((new Date().getMonth()+1).toString().padStart(2,"0"));
 
-export default function App(){
+  const enP=(fecha)=>{
+    if(!fecha||pdfPeriodo==="todo") return true;
+    if(pdfPeriodo==="anio") return fecha.startsWith(pdfAnio);
+    if(pdfPeriodo==="mes") return fecha.startsWith(pdfAnio+"-"+pdfMes);
+    return true;
+  };
+
+  const misPedidos=pedidos.filter(p=>p.proveedor===nombre&&!p.esBodega&&enP(p.fecha)).sort((a,b)=>(b.fecha||"").localeCompare(a.fecha||""));
+  const misAbonos=abonosProv.filter(a=>a.proveedor===nombre&&enP(a.fecha)).sort((a,b)=>b.fecha.localeCompare(a.fecha));
+  const totalComprado=misPedidos.reduce((s,p)=>s+(p.costo+(p.otroCosto||0)),0);
+  const totalAbonado=misAbonos.reduce((s,a)=>s+a.monto,0);
+  const saldo=totalComprado-totalAbonado;
+
+  const nombreMes={"01":"Enero","02":"Febrero","03":"Marzo","04":"Abril","05":"Mayo","06":"Junio","07":"Julio","08":"Agosto","09":"Septiembre","10":"Octubre","11":"Noviembre","12":"Diciembre"};
+  const años=[...new Set([...misPedidos,...misAbonos].map(x=>x.fecha?.slice(0,4)).filter(Boolean))].sort((a,b)=>b-a);
+
+  const descargarPDF=()=>{
+    const fechaDoc=new Date().toLocaleDateString("es-MX",{year:"numeric",month:"long",day:"numeric"});
+    const periodoLabel=pdfPeriodo==="todo"?"Historial completo":pdfPeriodo==="anio"?`Año ${pdfAnio}`:`${nombreMes[pdfMes]} ${pdfAnio}`;
+    const rowsPed=misPedidos.map(p=>`
+      <tr>
+        <td>${p.fecha||"—"}</td>
+        <td>${p.mercancia}</td>
+        <td style="text-align:center">${p.cant}</td>
+        <td style="text-align:right">${fmt(p.costo+(p.otroCosto||0))}</td>
+        <td style="text-align:center;color:${p.clientePago==="PAGADO"||p.clientePago==="PAGADO TRANSFERENCIA"?"#16a34a":"#dc2626"}">${p.clientePago||"Pendiente"}</td>
+      </tr>`).join("");
+    const rowsAb=misAbonos.map(a=>`
+      <tr>
+        <td>${a.fecha}</td>
+        <td>${a.nota||"—"}</td>
+        <td style="text-align:right;color:#16a34a;font-weight:700">${fmt(a.monto)}</td>
+      </tr>`).join("");
+    const html=`<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+      *{box-sizing:border-box;margin:0;padding:0}
+      body{font-family:'Helvetica Neue',Arial,sans-serif;color:#1c1917;padding:40px;font-size:13px}
+      h1{font-size:22px;font-weight:800;letter-spacing:-0.5px}
+      .hero{display:flex;justify-content:space-between;align-items:flex-start;margin:24px 0;padding:20px;background:#f5f5f4;border-radius:12px}
+      .stat{text-align:right}.stat .label{font-size:10px;color:#a8a29e;text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px}.stat .value{font-size:22px;font-weight:800}
+      .stats{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:24px}
+      .stat-box{padding:14px;border-radius:10px;border:1px solid #e7e5e4}
+      .stat-box .l{font-size:10px;color:#a8a29e;text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px}
+      .stat-box .v{font-size:18px;font-weight:800}
+      table{width:100%;border-collapse:collapse;margin-bottom:24px}
+      th{font-size:10px;font-weight:700;color:#a8a29e;text-transform:uppercase;letter-spacing:.06em;padding:8px;border-bottom:2px solid #e7e5e4;text-align:left}
+      td{padding:8px;border-bottom:1px solid #f5f5f4;font-size:12px}
+      h2{font-size:13px;font-weight:700;color:#a8a29e;text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px}
+    </style></head><body>
+      <h1>${nombre}</h1>
+      <div style="color:#a8a29e;font-size:12px;margin-top:4px">Estado de cuenta proveedor · ${periodoLabel} · ${fechaDoc}</div>
+      <div class="hero">
+        <div>
+          <div style="font-size:11px;color:#a8a29e;text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px">Total comprado</div>
+          <div style="font-size:28px;font-weight:800;color:#92400e">${fmt(totalComprado)}</div>
+        </div>
+        <div class="stat">
+          <div class="label">Saldo pendiente</div>
+          <div class="value" style="color:${saldo>0?"#dc2626":"#16a34a"}">${fmt(saldo)}</div>
+        </div>
+      </div>
+      <div class="stats">
+        <div class="stat-box"><div class="l">Total comprado</div><div class="v" style="color:#92400e">${fmt(totalComprado)}</div></div>
+        <div class="stat-box"><div class="l">Total abonado</div><div class="v" style="color:#16a34a">${fmt(totalAbonado)}</div></div>
+        <div class="stat-box" style="background:${saldo>0?"#fff1f2":"#f0fdf4"}"><div class="l">${saldo>0?"Por pagar":"Al corriente"}</div><div class="v" style="color:${saldo>0?"#dc2626":"#16a34a"}">${fmt(Math.abs(saldo))}</div></div>
+      </div>
+      <h2>Pedidos (${misPedidos.length})</h2>
+      <table><thead><tr><th>Fecha</th><th>Mercancía</th><th style="text-align:center">Cant.</th><th style="text-align:right">Costo</th><th style="text-align:center">Estado cliente</th></tr></thead><tbody>${rowsPed}</tbody>
+        <tfoot><tr><td colspan="3"><strong>TOTAL</strong></td><td style="text-align:right;font-weight:800">${fmt(totalComprado)}</td><td></td></tr></tfoot>
+      </table>
+      <h2>Pagos realizados (${misAbonos.length})</h2>
+      <table><thead><tr><th>Fecha</th><th>Nota</th><th style="text-align:right">Monto</th></tr></thead><tbody>${rowsAb}</tbody>
+        <tfoot><tr><td colspan="2"><strong>TOTAL ABONADO</strong></td><td style="text-align:right;font-weight:800;color:#16a34a">${fmt(totalAbonado)}</td></tr></tfoot>
+      </table>
+    </body></html>`;
+    const win=window.open("","_blank");
+    win.document.write(html);
+    win.document.close();
+    setTimeout(()=>{win.print();},400);
+  };
+
+  return(
+    <Modal title={`Estado de cuenta — ${nombre}`} onClose={onClose}>
+      {/* Periodo filter */}
+      <div style={{display:"flex",gap:8,marginBottom:20,flexWrap:"wrap"}}>
+        {[["todo","Todo"],["anio","Por año"],["mes","Por mes"]].map(([k,l])=>(
+          <button key={k} onClick={()=>setPdfPeriodo(k)} style={{padding:"6px 14px",borderRadius:8,border:"1px solid #e7e5e4",background:pdfPeriodo===k?"#1c1917":"#f5f5f4",color:pdfPeriodo===k?"#fff":"#44403c",fontSize:12,cursor:"pointer",fontFamily:"'Outfit',sans-serif",fontWeight:pdfPeriodo===k?600:400}}>{l}</button>
+        ))}
+        {pdfPeriodo!=="todo"&&(
+          <select value={pdfAnio} onChange={e=>setPdfAnio(e.target.value)} style={{...inp,width:"auto",fontSize:12}}>
+            {(años.length?años:[new Date().getFullYear().toString()]).map(a=><option key={a}>{a}</option>)}
+          </select>
+        )}
+        {pdfPeriodo==="mes"&&(
+          <select value={pdfMes} onChange={e=>setPdfMes(e.target.value)} style={{...inp,width:"auto",fontSize:12}}>
+            {["01","02","03","04","05","06","07","08","09","10","11","12"].map(m=><option key={m} value={m}>{nombreMes[m]}</option>)}
+          </select>
+        )}
+      </div>
+
+      {/* Stats */}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,marginBottom:20}}>
+        <div style={{background:"#fff7ed",borderRadius:10,padding:"12px 14px"}}>
+          <div style={{fontSize:10,color:"#92400e",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:4,fontFamily:"'Outfit',sans-serif"}}>Total comprado</div>
+          <div style={{fontSize:18,fontWeight:800,color:"#92400e",fontFamily:"'Outfit',sans-serif"}}>{fmt(totalComprado)}</div>
+        </div>
+        <div style={{background:"#f0fdf4",borderRadius:10,padding:"12px 14px"}}>
+          <div style={{fontSize:10,color:"#166534",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:4,fontFamily:"'Outfit',sans-serif"}}>Total abonado</div>
+          <div style={{fontSize:18,fontWeight:800,color:"#16a34a",fontFamily:"'Outfit',sans-serif"}}>{fmt(totalAbonado)}</div>
+        </div>
+        <div style={{background:saldo>0?"#fff1f2":"#f0fdf4",borderRadius:10,padding:"12px 14px"}}>
+          <div style={{fontSize:10,color:saldo>0?"#9f1239":"#166534",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:4,fontFamily:"'Outfit',sans-serif"}}>{saldo>0?"Por pagar":"Al corriente"}</div>
+          <div style={{fontSize:18,fontWeight:800,color:saldo>0?"#dc2626":"#16a34a",fontFamily:"'Outfit',sans-serif"}}>{fmt(Math.abs(saldo))}</div>
+        </div>
+      </div>
+
+      {/* Pedidos table */}
+      <div style={{fontSize:11,fontWeight:600,color:"#a8a29e",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:10,fontFamily:"'Outfit',sans-serif"}}>Pedidos ({misPedidos.length})</div>
+      <table style={{width:"100%",borderCollapse:"collapse",marginBottom:20}}>
+        <thead>
+          <tr style={{borderBottom:"1px solid #e7e5e4"}}>
+            {["Fecha","Mercancía","Cant.","Costo","Estado cliente"].map(h=>(
+              <th key={h} style={{fontSize:10,fontWeight:600,color:"#a8a29e",textAlign:"left",padding:"0 8px 8px 0",textTransform:"uppercase",letterSpacing:"0.06em",fontFamily:"'Outfit',sans-serif"}}>{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {misPedidos.map(p=>(
+            <tr key={p.id} style={{borderTop:"1px solid #f5f5f4"}}>
+              <td style={{padding:"8px 8px 8px 0",fontSize:12,color:"#a8a29e"}}>{p.fecha}</td>
+              <td style={{padding:"8px 8px 8px 0",fontSize:13,fontWeight:500,color:"#1c1917",fontFamily:"'Outfit',sans-serif"}}>{p.mercancia}</td>
+              <td style={{padding:"8px 8px 8px 0",fontSize:12,color:"#78716c"}}>{p.cant}</td>
+              <td style={{padding:"8px 8px 8px 0",fontSize:12,fontWeight:600,color:"#1c1917"}}>{fmt(p.costo+(p.otroCosto||0))}</td>
+              <td style={{padding:"8px 0"}}>
+                <span style={{background:p.clientePago==="PAGADO"||p.clientePago==="PAGADO TRANSFERENCIA"?"#dcfce7":p.clientePago==="ABONO PARCIAL"?"#fef3c7":"#fee2e2",color:p.clientePago==="PAGADO"||p.clientePago==="PAGADO TRANSFERENCIA"?"#166534":p.clientePago==="ABONO PARCIAL"?"#92400e":"#b91c1c",fontSize:10,fontWeight:600,padding:"2px 8px",borderRadius:20,fontFamily:"'Outfit',sans-serif"}}>{p.clientePago||"Pendiente"}</span>
+              </td>
+            </tr>
+          ))}
+          <tr style={{borderTop:"2px solid #e7e5e4"}}>
+            <td colSpan={3} style={{padding:"8px 0",fontSize:12,fontWeight:700,color:"#1c1917",fontFamily:"'Outfit',sans-serif"}}>TOTAL</td>
+            <td style={{padding:"8px 0",fontSize:14,fontWeight:800,color:"#92400e",fontFamily:"'Outfit',sans-serif"}}>{fmt(totalComprado)}</td>
+            <td></td>
+          </tr>
+        </tbody>
+      </table>
+
+      {/* Abonos */}
+      <div style={{fontSize:11,fontWeight:600,color:"#a8a29e",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:10,fontFamily:"'Outfit',sans-serif"}}>Pagos realizados ({misAbonos.length})</div>
+      {misAbonos.map(a=>(
+        <div key={a.id} style={{display:"flex",justifyContent:"space-between",padding:"7px 0",borderTop:"1px solid #f5f5f4"}}>
+          <span style={{fontSize:13,color:"#44403c",fontFamily:"'Outfit',sans-serif"}}>{a.fecha}{a.nota?` · ${a.nota}`:""}</span>
+          <span style={{fontSize:14,fontWeight:700,color:"#16a34a",fontFamily:"'Outfit',sans-serif"}}>+{fmt(a.monto)}</span>
+        </div>
+      ))}
+
+      {/* Actions */}
+      <div style={{display:"flex",gap:10,marginTop:20,paddingTop:16,borderTop:"1px solid #f5f5f4"}}>
+        <button onClick={descargarPDF} style={{...btnP,flex:1}}>🖨️ Imprimir / PDF</button>
+        <button onClick={onClose} style={{flex:1,padding:"10px 0",background:"#f5f5f4",border:"1px solid #e7e5e4",borderRadius:10,color:"#44403c",cursor:"pointer",fontFamily:"'Outfit',sans-serif",fontWeight:500}}>Cerrar</button>
+      </div>
+    </Modal>
+  );
+}
+
+function Axia(){
   const [tab,setTab]=useState(0);
+  const [seccion,setSeccion]=useState(null);
+  const [adminTab,setAdminTab]=useState('resumen');
+  const [provOpenMap,setProvOpenMap]=useState({});
+  const [modalEstadoProv,setModalEstadoProv]=useState(null);
+  const [modalMerma,setModalMerma]=useState(null);
+  const [bSort,setBSort]=useState('ultimoMod');
+  const [provFiltro,setProvFiltro]=useState('todo');
+  const [pedFiltro,setPedFiltro]=useState('todo');
       const [modalEstadoCli,setModalEstadoCli]=useState(null);
       const [editMerma,setEditMerma]=useState(null);
       const [modalDistribuir,setModalDistribuir]=useState(null);
@@ -599,7 +796,7 @@ export default function App(){
         return lun.toISOString().slice(0,10);
       });
       const [cliSearch,setCliSearch]=useState("");
-      const [cliSort,setCliSort]=useState("saldo");
+      const [cliSort,setCliSort]=useState("ultimoMod");
       const [bodega,setBodegaR]=useState([]);
       const [modalBodega,setModalBodega]=useState(null);
       const [modalDist,setModalDist]=useState(null);
@@ -646,7 +843,7 @@ export default function App(){
     (async()=>{
       try{
         const keys=["axia-pedidos","axia-aprov","axia-acli","axia-clientes","axia-proveedores","axia-vendedores","axia-bodega"];
-        const [rp,rap,rac,rc,rpv,rv,rbo]=await Promise.all(keys.map(k=>storage.get(k,true).catch(()=>null)));
+        const [rp,rap,rac,rc,rpv,rv,rbo]=await Promise.all(keys.map(k=>window.storage.get(k,true).catch(()=>null)));
         if(rp?.value)  setPedR(JSON.parse(rp.value));
         if(rap?.value) setApR(JSON.parse(rap.value));
         if(rac?.value) setAcR(JSON.parse(rac.value));
@@ -654,9 +851,9 @@ export default function App(){
         if(rpv?.value) setProvR(JSON.parse(rpv.value));
         if(rv?.value)  setVendR(JSON.parse(rv.value));
         if(rbo?.value) setBodegaR(JSON.parse(rbo.value));
-        const rfl = await storage.get("axia-flujo",true).catch(()=>null);
+        const rfl = await window.storage.get("axia-flujo",true).catch(()=>null);
         if(rfl?.value) setFlujoR(JSON.parse(rfl.value));
-        const rf = await storage.get("axia-folio",true).catch(()=>null);
+        const rf = await window.storage.get("axia-folio",true).catch(()=>null);
         if(rf?.value) setNextFolioR(JSON.parse(rf.value));
       }catch(e){}
       setLoading(false);
@@ -665,7 +862,7 @@ export default function App(){
 
   const save=useCallback(async(k,v)=>{
     setGuardando(true);
-    try{await storage.set(k,JSON.stringify(v),true);}catch(e){}
+    try{await window.storage.set(k,JSON.stringify(v),true);}catch(e){}
     setTimeout(()=>setGuardando(false),900);
   },[]);
 
@@ -795,94 +992,87 @@ export default function App(){
 
   if(loading) return(
     <div style={{minHeight:"100vh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:16}}>
-      <link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
-      <div style={{width:48,height:48,borderRadius:14,background:`linear-gradient(135deg,${C.accent},${C.accent3})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,fontWeight:900,color:"#fff",fontFamily:"'Sora',sans-serif"}}>A</div>
-      <div style={{fontFamily:"'Sora',sans-serif",color:C.accent3,fontSize:16}}>Cargando AXIA...</div>
+      <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
+      <div style={{width:48,height:48,borderRadius:14,background:`linear-gradient(135deg,${C.accent},${C.accent3})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,fontWeight:900,color:"#fff",fontFamily:"'Outfit',sans-serif"}}>A</div>
+      <div style={{fontFamily:"'Outfit',sans-serif",color:C.accent3,fontSize:16}}>Cargando AXIA...</div>
     </div>
   );
 
   const isPedOpen = modalPed !== null;
 
   return(
-    <div style={{minHeight:"100vh",background:C.bg,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>
-      <link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+    <div style={{minHeight:"100vh",background:C.bg,color:C.text,fontFamily:"'Outfit',sans-serif"}}>
+      <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
       <style>{`*{box-sizing:border-box;} select option{background:#fff;}`}</style>
 
       {guardando&&<div style={{position:"fixed",bottom:20,right:20,background:"#fff",border:`1px solid ${C.border}`,borderRadius:10,padding:"10px 16px",fontSize:13,color:C.accent3,zIndex:999,boxShadow:"0 4px 12px rgba(0,0,0,0.1)"}}>💾 Guardando...</div>}
 
       {/* HEADER */}
-      <div style={{background:C.surface,borderBottom:`1px solid ${C.border}`,padding:"14px 24px",display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:10}}>
-        <div style={{display:"flex",alignItems:"center",gap:12}}>
-          <div style={{width:42,height:42,borderRadius:12,background:`linear-gradient(135deg,${C.accent},${C.accent3})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,fontWeight:900,color:"#fff",fontFamily:"'Sora',sans-serif"}}>A</div>
-          <div>
-            <div style={{fontFamily:"'Sora',sans-serif",fontSize:20,fontWeight:700,color:C.text,lineHeight:1}}>AXIA</div>
-            <div style={{fontSize:10,color:C.accent3,letterSpacing:"0.18em",textTransform:"uppercase"}}>Distribution & Supply</div>
+      <div style={{background:"#ffffff",borderBottom:"1px solid #e7e5e4",padding:"0 32px",display:"flex",alignItems:"center",justifyContent:"space-between",height:56}}>
+        <button onClick={()=>setSeccion(null)} style={{background:"none",border:"none",cursor:"pointer",display:"flex",alignItems:"center",gap:8,padding:0}}>
+          <div style={{fontSize:15,fontWeight:700,color:"#1c1917",letterSpacing:"-0.3px",fontFamily:"'Outfit',sans-serif",lineHeight:1}}>AXIA</div>
+          <div style={{fontSize:9,color:"#a8a29e",letterSpacing:"0.15em",textTransform:"uppercase",fontFamily:"'Outfit',sans-serif"}}>Distribution & Supply</div>
+        </button>
+        <div style={{display:"flex",gap:2}}>
+          {[
+            {key:"Clientes",icon:"👥",t:2},
+            {key:"Proveedores",icon:"🏭",t:1},
+            {key:"Pedidos",icon:"📦",t:0},
+            {key:"Bodega",icon:"🏪",t:5},
+            {key:"Administracion",icon:"📊",t:3},
+          ].map(s=>(
+            <button key={s.key} onClick={()=>{setSeccion(s.key);setTab(s.t);}}
+              style={{padding:"6px 14px",border:"none",borderRadius:8,background:seccion===s.key?"#1c1917":"transparent",color:seccion===s.key?"#fff":"#78716c",fontSize:12,fontWeight:seccion===s.key?600:400,cursor:"pointer",fontFamily:"'Outfit',sans-serif",display:"flex",alignItems:"center",gap:5}}>
+              <span style={{fontSize:14}}>{s.icon}</span>
+              <span style={{display:"inline"}}>{s.key==="Administracion"?"Admin":s.key}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+{/* HOME / SECTION NAV */}
+      {seccion===null?(
+        <div style={{padding:"40px 32px",background:"#f5f5f4",minHeight:"calc(100vh - 56px)"}}>
+          <div style={{maxWidth:600,margin:"0 auto"}}>
+            <div style={{fontFamily:"'Outfit',sans-serif",fontSize:26,fontWeight:700,color:"#1c1917",letterSpacing:"-0.5px",marginBottom:4}}>Bienvenido</div>
+            <div style={{fontSize:13,color:"#a8a29e",fontFamily:"'Outfit',sans-serif",marginBottom:24}}>{new Date().toLocaleDateString("es-MX",{weekday:"long",year:"numeric",month:"long",day:"numeric"})}</div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,marginBottom:32}}>
+              {[{v:fmt(totG),l:"Ganancia",c:"#16a34a"},{v:fmt(totCobrar),l:"Por cobrar",c:"#d97706"},{v:fmt(totPagar),l:"Por pagar",c:"#dc2626"}].map(s=>(
+                <div key={s.l} style={{background:"#ffffff",border:"1px solid #e7e5e4",borderRadius:12,padding:"14px 16px"}}>
+                  <div style={{fontSize:10,color:"#a8a29e",textTransform:"uppercase",letterSpacing:"0.07em",fontFamily:"'Outfit',sans-serif",marginBottom:6}}>{s.l}</div>
+                  <div style={{fontSize:18,fontWeight:700,color:s.c,fontFamily:"'Outfit',sans-serif"}}>{s.v}</div>
+                </div>
+              ))}
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
+              {[
+                {icon:"👥",title:"Clientes",desc:"Saldos, pagos y estados de cuenta",t0:2},
+                {icon:"🏭",title:"Proveedores",desc:"Lo que debes y pagos realizados",t0:1},
+                {icon:"📦",title:"Pedidos",desc:"Crear, editar y dar seguimiento",t0:0},
+                {icon:"🏪",title:"Bodega",desc:"Inventario, entradas y distribuciones",t0:5},
+                {icon:"📊",title:"Administracion",desc:"Flujo de efectivo, ganancias y resumen",t0:3},
+              ].map((s,i)=>(
+                <div key={i} onClick={()=>{setSeccion(s.title);setTab(s.t0);}}
+                  style={{background:"#ffffff",border:"1px solid #e7e5e4",borderRadius:16,padding:"22px",cursor:"pointer"}}
+                  onMouseEnter={e=>{e.currentTarget.style.borderColor="#78716c";e.currentTarget.style.transform="translateY(-1px)";}}
+                  onMouseLeave={e=>{e.currentTarget.style.borderColor="#e7e5e4";e.currentTarget.style.transform="none";}}>
+                  <div style={{fontSize:28,marginBottom:12}}>{s.icon}</div>
+                  <div style={{fontFamily:"'Outfit',sans-serif",fontSize:14,fontWeight:600,color:"#1c1917",marginBottom:4}}>{s.title}</div>
+                  <div style={{fontFamily:"'Outfit',sans-serif",fontSize:12,color:"#a8a29e",lineHeight:1.5}}>{s.desc}</div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
-        <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
-          {[{v:fmt(totG),l:"Ganancia",c:C.green},{v:fmt(totCobrar),l:"Por cobrar",c:C.yellow},{v:fmt(totPagar),l:"Por pagar",c:C.red}].map(s=>(
-            <div key={s.l} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:10,padding:"7px 14px",textAlign:"center"}}>
-              <div style={{fontSize:15,fontWeight:700,color:s.c,fontFamily:"'Sora',sans-serif"}}>{s.v}</div>
-              <div style={{fontSize:10,color:C.textDim,textTransform:"uppercase",letterSpacing:"0.07em"}}>{s.l}</div>
-            </div>
+      ):(
+        <div style={{background:"#ffffff",borderBottom:"1px solid #e7e5e4",display:"flex",alignItems:"center",gap:4,padding:"0 32px",height:44}}>
+          {seccion==="Administracion"&&[{i:3,t:"Resumen"},{i:4,t:"Flujo de Efectivo"}].map(({i,t})=>(
+            <button key={i} onClick={()=>{setAdminTab(i===3?"resumen":"flujo");setTab(i);}} style={{padding:"0 16px",height:44,border:"none",background:"none",fontFamily:"'Outfit',sans-serif",fontSize:13,fontWeight:tab===i?600:400,cursor:"pointer",color:tab===i?"#1c1917":"#a8a29e",borderBottom:tab===i?"2px solid #1c1917":"2px solid transparent"}}>{t}</button>
           ))}
-          <button onClick={()=>exportCSV(pedidos,abonosProv,abonosCli)} style={{...btnP,padding:"8px 16px",fontSize:13,borderRadius:10}}>📥 Exportar Excel</button>
-          <button onClick={async()=>{
-            if(!confirm("¿Borrar TODOS los datos guardados y empezar desde cero?")) return;
-            const keys=["axia-pedidos","axia-aprov","axia-acli","axia-clientes","axia-proveedores","axia-vendedores","axia-flujo","axia-bodega"];
-            await Promise.all(keys.map(k=>storage.delete(k,true).catch(()=>{})));
-            await storage.delete("axia-folio",true).catch(()=>{});
-            Object.keys(localStorage).forEach(k=>{ if(k.startsWith("axia-")) localStorage.removeItem(k); });
-            window.location.reload();
-          }} style={{padding:"8px 16px",fontSize:13,borderRadius:10,background:"transparent",border:`1px solid ${C.border2}`,color:C.red,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",fontWeight:600}}>
-            🗑 Resetear
-          </button>
+          {seccion!=="Administracion"&&<div style={{padding:"0 16px",height:44,display:"flex",alignItems:"center",fontFamily:"'Outfit',sans-serif",fontSize:13,fontWeight:600,color:"#1c1917",borderBottom:"2px solid #1c1917"}}>{seccion}</div>}
         </div>
-      </div>
+      )}
 
-      
-      {/* ── FILTRO PERIODO ── */}
-      <div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 24px",background:"#f8f8f9",borderBottom:`1px solid ${C.border}`,flexWrap:"wrap"}}>
-        <span style={{fontSize:11,color:C.textDim,fontWeight:600,textTransform:"uppercase",letterSpacing:"0.06em",flexShrink:0}}>📅 Periodo:</span>
-        {[{v:"todo",l:"Historial completo"},{v:"anio",l:"Por año"},{v:"mes",l:"Por mes"},{v:"sem",l:"Por semana"}].map(op=>(
-          <button key={op.v} onClick={()=>setPeriodo(op.v)} style={{padding:"4px 12px",borderRadius:20,border:`1px solid ${periodo===op.v?C.accent:C.border}`,background:periodo===op.v?C.accent:"transparent",color:periodo===op.v?"#fff":C.textMid,fontSize:12,cursor:"pointer",fontWeight:periodo===op.v?600:400,transition:"all 0.15s"}}>
-            {op.l}
-          </button>
-        ))}
-        {periodo==="anio"&&(
-          <select value={periodoAnio} onChange={e=>setPeriodoAnio(e.target.value)} style={{padding:"4px 10px",borderRadius:8,border:`1px solid ${C.border}`,fontSize:12,color:C.text,background:"#fff",cursor:"pointer"}}>
-            {(años.length>0?años:[new Date().getFullYear().toString()]).map(a=>(<option key={a} value={a}>{a}</option>))}
-          </select>
-        )}
-        {periodo==="mes"&&(<>
-          <select value={periodoAnio} onChange={e=>setPeriodoAnio(e.target.value)} style={{padding:"4px 10px",borderRadius:8,border:`1px solid ${C.border}`,fontSize:12,color:C.text,background:"#fff",cursor:"pointer"}}>
-            {(años.length>0?años:[new Date().getFullYear().toString()]).map(a=>(<option key={a} value={a}>{a}</option>))}
-          </select>
-          <select value={periodoMes} onChange={e=>setPeriodoMes(e.target.value)} style={{padding:"4px 10px",borderRadius:8,border:`1px solid ${C.border}`,fontSize:12,color:C.text,background:"#fff",cursor:"pointer"}}>
-            {meses.map(m=>(<option key={m} value={m}>{nombreMes[m]}</option>))}
-          </select>
-        </>)}
-        {periodo==="sem"&&(
-          <select value={periodoSem} onChange={e=>setPeriodoSem(e.target.value)} style={{padding:"4px 10px",borderRadius:8,border:`1px solid ${C.border}`,fontSize:12,color:C.text,background:"#fff",cursor:"pointer"}}>
-            {getSemanasDisponibles().map(lun=>{
-              const dom=new Date(lun+"T12:00:00");dom.setDate(dom.getDate()+6);
-              return(<option key={lun} value={lun}>{lun} → {dom.toISOString().slice(0,10)}</option>);
-            })}
-          </select>
-        )}
-        {periodo!=="todo"&&(
-          <button onClick={()=>setPeriodo("todo")} style={{padding:"4px 10px",borderRadius:20,border:`1px solid ${C.border}`,background:"transparent",color:C.textDim,fontSize:11,cursor:"pointer",marginLeft:"auto"}}>✕ Quitar filtro</button>
-        )}
-      </div>
-
-{/* TABS */}
-      <div style={{display:"flex",gap:2,padding:"10px 24px 0",borderBottom:`1px solid ${C.border}`,background:C.surface}}>
-        {TABS.map((t,i)=>(
-          <button key={t} onClick={()=>setTab(i)} style={{padding:"8px 18px",borderRadius:"8px 8px 0 0",border:"none",fontFamily:"'DM Sans',sans-serif",fontSize:13,fontWeight:500,cursor:"pointer",background:tab===i?C.bg:"transparent",color:tab===i?C.accent3:C.textDim,borderBottom:tab===i?`2px solid ${C.accent3}`:"2px solid transparent"}}>{t}</button>
-        ))}
-      </div>
-
-      <div style={{padding:"20px 24px"}}>
+      <div style={{padding:"28px 32px",display:seccion===null?"none":"block"}}>
 
         {/* ══ PEDIDOS ══ */}
         {tab===0&&(<>
@@ -949,137 +1139,109 @@ export default function App(){
 
         {/* ══ PROVEEDORES ══ */}
         {tab===1&&(<>
-          <div style={{display:"flex",justifyContent:"flex-end",marginBottom:16}}>
-            <button onClick={()=>{setEditProv(null);setNewNom("");setModalProv(true);}} style={{...btnP,padding:"9px 18px",fontSize:13}}>+ Nuevo proveedor</button>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20}}>
+            <div style={{fontSize:13,color:"#a8a29e",fontFamily:"'Outfit',sans-serif"}}>{proveedores.length} proveedores</div>
+            <button onClick={()=>{setEditProv(null);setNewNom("");setModalProv(true);}} style={{...btnP,padding:"9px 20px",fontSize:13}}>+ Nuevo proveedor</button>
           </div>
-          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(320px,1fr))",gap:16}}>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
             {proveedores.map(prov=>{
+              const todosPedidos=pedidos.filter(p=>p.proveedor===prov.nombre&&!p.esBodega);
+              const bItems=bodega.filter(b=>b.proveedor===prov.nombre);
+              const pedFiltProv=provFiltro==="todo"?todosPedidos:provFiltro==="generado"?todosPedidos.filter(p=>!p.recibido||p.recibido===""||p.recibido==="PENDIENTE"):provFiltro==="entregado"?todosPedidos.filter(p=>p.clientePago==="PAGADO"||p.clientePago==="PAGADO TRANSFERENCIA"):todosPedidos;
+              const bFiltProv=provFiltro==="bodega"||provFiltro==="todo"?bItems:[];
+              if(provFiltro!=="todo"&&pedFiltProv.length===0&&bFiltProv.length===0) return null;
               const saldo=saldP[prov.nombre]||0;
-              const pp=pedidos.filter(p=>p.proveedor===prov.nombre);
-              const tC=pp.reduce((s,p)=>s+p.costo+(p.otroCosto||0),0);
+              const tC=todosPedidos.reduce((s,p)=>s+(p.costo+(p.otroCosto||0)),0);
               const tA=abonosProv.filter(a=>a.proveedor===prov.nombre).reduce((s,a)=>s+a.monto,0);
+              const open=!!provOpenMap[prov.id];
+              const toggleOpen=()=>setProvOpenMap(m=>({...m,[prov.id]:!m[prov.id]}));
               return(
-                <div key={prov.id} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:20,boxShadow:"0 1px 4px rgba(0,0,0,0.06)"}}>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:12}}>
+                <div key={prov.id} style={{background:"#ffffff",border:"1px solid #e7e5e4",borderRadius:16,overflow:"hidden"}}>
+                  <div style={{padding:"18px 24px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:16,cursor:"pointer"}} onClick={toggleOpen}>
+                    <div style={{display:"flex",alignItems:"center",gap:14}}>
+                      <div style={{width:44,height:44,borderRadius:12,background:"#1c1917",display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:700,color:"#fff",fontFamily:"'Outfit',sans-serif",flexShrink:0}}>{prov.nombre[0]}</div>
+                      <div>
+                        <div style={{fontSize:16,fontWeight:700,color:"#1c1917",fontFamily:"'Outfit',sans-serif"}}>{prov.nombre}</div>
+                        <div style={{fontSize:12,color:"#a8a29e",marginTop:2}}>{provFiltro==="bodega"?`${bFiltProv.length} en bodega`:`${pedFiltProv.length} pedidos`}</div>
+                      </div>
+                    </div>
+                    <div style={{display:"flex",alignItems:"center",gap:16}}>
+                      <div style={{textAlign:"right"}}>
+                        <div style={{fontSize:11,color:"#a8a29e",textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:2}}>Saldo</div>
+                        <div style={{fontSize:20,fontWeight:800,color:saldo>0?"#dc2626":"#16a34a",fontFamily:"'Outfit',sans-serif"}}>{fmt(saldo)}</div>
+                      </div>
+                      <div style={{fontSize:18,color:"#a8a29e",transform:open?"rotate(180deg)":"none",transition:"transform .2s"}}>▾</div>
+                    </div>
+                  </div>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:1,background:"#f5f5f4"}}>
+                    <div style={{background:"#fff7ed",padding:"12px 20px"}}><div style={{fontSize:10,color:"#92400e",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:3,fontFamily:"'Outfit',sans-serif"}}>Total comprado</div><div style={{fontSize:17,fontWeight:800,color:"#92400e",fontFamily:"'Outfit',sans-serif"}}>{fmt(tC)}</div></div>
+                    <div style={{background:"#f0fdf4",padding:"12px 20px"}}><div style={{fontSize:10,color:"#166534",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:3,fontFamily:"'Outfit',sans-serif"}}>Total abonado</div><div style={{fontSize:17,fontWeight:800,color:"#16a34a",fontFamily:"'Outfit',sans-serif"}}>{fmt(tA)}</div></div>
+                    <div style={{background:saldo>0?"#fff1f2":"#f0fdf4",padding:"12px 20px"}}><div style={{fontSize:10,color:saldo>0?"#9f1239":"#166534",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:3,fontFamily:"'Outfit',sans-serif"}}>{saldo>0?"Por pagar":"Al corriente"}</div><div style={{fontSize:17,fontWeight:800,color:saldo>0?"#dc2626":"#16a34a",fontFamily:"'Outfit',sans-serif"}}>{fmt(Math.abs(saldo))}</div></div>
+                  </div>
+                  {open&&(
                     <div>
-                      <div style={{fontFamily:"'Sora',sans-serif",fontSize:16,fontWeight:700,color:C.accent3}}>{prov.nombre}</div>
-                      <div style={{fontSize:12,color:C.textDim,marginTop:2}}>{pp.length} pedidos</div>
-                    </div>
-                    <div style={{display:"flex",alignItems:"center",gap:8}}>
-                      <div style={{textAlign:"right",flexShrink:0,maxWidth:130}}>
-                        <div style={{fontSize:10,color:C.textDim}}>Saldo</div>
-                        <div style={{fontFamily:"'Sora',sans-serif",fontSize:13,fontWeight:700,color:gColor(saldo),maxWidth:110,textAlign:"right",wordBreak:"break-all"}}>{fmt(saldo)}</div>
+                      {pedFiltProv.length>0&&(
+                        <div style={{padding:"14px 24px",borderTop:"1px solid #f5f5f4"}}>
+                          <div style={{fontSize:11,fontWeight:600,color:"#a8a29e",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:10,fontFamily:"'Outfit',sans-serif"}}>Pedidos</div>
+                          <table style={{width:"100%",borderCollapse:"collapse"}}>
+                            <thead><tr>{["#","Mercancía","Cant.","Costo","Estado"].map(h=>(<th key={h} style={{fontSize:10,fontWeight:600,color:"#a8a29e",textAlign:"left",padding:"0 8px 8px 0",textTransform:"uppercase",letterSpacing:"0.06em",fontFamily:"'Outfit',sans-serif"}}>{h}</th>))}</tr></thead>
+                            <tbody>{pedFiltProv.map(p=>(<tr key={p.id} style={{borderTop:"1px solid #f5f5f4"}}><td style={{padding:"8px 8px 8px 0",fontSize:12,color:"#a8a29e"}}>#{p.id}</td><td style={{padding:"8px 8px 8px 0",fontSize:13,fontWeight:500,color:"#1c1917",fontFamily:"'Outfit',sans-serif"}}>{p.mercancia}</td><td style={{padding:"8px 8px 8px 0",fontSize:12,color:"#78716c"}}>{p.cant}</td><td style={{padding:"8px 8px 8px 0",fontSize:12,fontWeight:600,color:"#1c1917"}}>{fmt(p.costo+(p.otroCosto||0))}</td><td style={{padding:"8px 0"}}><span style={{background:p.clientePago==="PAGADO"||p.clientePago==="PAGADO TRANSFERENCIA"?"#dcfce7":p.clientePago==="ABONO PARCIAL"?"#fef3c7":"#fee2e2",color:p.clientePago==="PAGADO"||p.clientePago==="PAGADO TRANSFERENCIA"?"#166534":p.clientePago==="ABONO PARCIAL"?"#92400e":"#b91c1c",fontSize:10,fontWeight:600,padding:"2px 8px",borderRadius:20}}>{p.clientePago||"Pendiente"}</span></td></tr>))}</tbody>
+                          </table>
+                        </div>
+                      )}
+                      {bFiltProv.length>0&&(
+                        <div style={{padding:"14px 24px",borderTop:"1px solid #f5f5f4"}}>
+                          <div style={{fontSize:11,fontWeight:600,color:"#a8a29e",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:10,fontFamily:"'Outfit',sans-serif"}}>Entradas en bodega</div>
+                          <table style={{width:"100%",borderCollapse:"collapse"}}>
+                            <thead><tr>{["Mercancía","Fecha","Costo/u","Comprado","Dist.","Disponible"].map(h=>(<th key={h} style={{fontSize:10,fontWeight:600,color:"#a8a29e",textAlign:"left",padding:"0 8px 8px 0",textTransform:"uppercase",letterSpacing:"0.06em",fontFamily:"'Outfit',sans-serif"}}>{h}</th>))}</tr></thead>
+                            <tbody>{bFiltProv.map(b=>{const td=(b.distribuciones||[]).reduce((s,d)=>s+d.cant,0);const dsp=b.cant-td-(b.mermas||[]).reduce((s,m)=>s+m.cant,0);return(<tr key={b.id} style={{borderTop:"1px solid #f5f5f4"}}><td style={{padding:"8px 8px 8px 0",fontSize:13,fontWeight:500,color:"#1c1917",fontFamily:"'Outfit',sans-serif"}}>{b.mercancia}</td><td style={{padding:"8px 8px 8px 0",fontSize:12,color:"#a8a29e"}}>{b.fecha}</td><td style={{padding:"8px 8px 8px 0",fontSize:12,color:"#78716c"}}>{fmt(b.unitario)}</td><td style={{padding:"8px 8px 8px 0",fontSize:12,fontWeight:600,color:"#1c1917"}}>{b.cant}</td><td style={{padding:"8px 8px 8px 0",fontSize:12,fontWeight:600,color:"#16a34a"}}>{td}</td><td style={{padding:"8px 0",fontSize:12,fontWeight:700,color:dsp>0?"#d97706":"#a8a29e"}}>{dsp}</td></tr>);})}</tbody>
+                          </table>
+                        </div>
+                      )}
+                      {abonosProv.filter(a=>a.proveedor===prov.nombre).length>0&&(
+                        <div style={{padding:"14px 24px",borderTop:"1px solid #f5f5f4"}}>
+                          <div style={{fontSize:11,fontWeight:600,color:"#a8a29e",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:10,fontFamily:"'Outfit',sans-serif"}}>Pagos realizados</div>
+                          {abonosProv.filter(a=>a.proveedor===prov.nombre).sort((a,b)=>b.fecha.localeCompare(a.fecha)).map(a=>(<div key={a.id} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderTop:"1px solid #f5f5f4"}}><span style={{fontSize:13,color:"#44403c",fontFamily:"'Outfit',sans-serif"}}>{a.fecha}{a.nota?` · ${a.nota}`:""}</span><span style={{fontSize:14,fontWeight:700,color:"#16a34a",fontFamily:"'Outfit',sans-serif"}}>+{fmt(a.monto)}</span></div>))}
+                        </div>
+                      )}
+                      <div style={{padding:"14px 24px",borderTop:"1px solid #f5f5f4",display:"flex",gap:10,flexWrap:"wrap"}}>
+                        <button onClick={e=>{e.stopPropagation();setModalEstadoProv(prov.nombre);}} style={{padding:"9px 18px",background:"#f5f5f4",border:"1px solid #e7e5e4",borderRadius:10,color:"#44403c",fontSize:13,cursor:"pointer",fontFamily:"'Outfit',sans-serif"}}>📋 Estado de cuenta</button>
+                        <button onClick={e=>{e.stopPropagation();setAForm({fecha:new Date().toISOString().slice(0,10)});setModalAP(prov.nombre);}} style={{padding:"9px 18px",background:"#1c1917",border:"none",borderRadius:10,color:"#fff",fontSize:13,cursor:"pointer",fontWeight:600,fontFamily:"'Outfit',sans-serif"}}>+ Registrar abono</button>
+                        <button onClick={e=>{e.stopPropagation();setNewNom(prov.nombre);setEditProv(prov);setModalProv(true);}} style={{padding:"9px 18px",background:"#f5f5f4",border:"1px solid #e7e5e4",borderRadius:10,color:"#44403c",fontSize:13,cursor:"pointer",fontFamily:"'Outfit',sans-serif"}}>✏️</button>
+                        <button onClick={e=>{e.stopPropagation();setProveedores(prev=>prev.filter(p=>p.id!==prov.id));}} style={{padding:"9px 18px",background:"#fff1f2",border:"1px solid #fecdd3",borderRadius:10,color:"#e11d48",fontSize:13,cursor:"pointer",fontFamily:"'Outfit',sans-serif"}}>🗑</button>
                       </div>
-                      <div style={{display:"flex",flexDirection:"column",gap:4}}>
-                        <button onClick={()=>{setNewNom(prov.nombre);setEditProv(prov);setModalProv(true);}} style={{background:"#f5f5f5",border:`1px solid ${C.border}`,borderRadius:6,padding:"3px 7px",cursor:"pointer",fontSize:11}}>✏️</button>
-                        <button onClick={()=>setProveedores(prev=>prev.filter(p=>p.id!==prov.id))} style={{background:"#fff0f0",border:`1px solid #fecaca`,borderRadius:6,padding:"3px 7px",cursor:"pointer",fontSize:11}}>🗑</button>
-                      </div>
-                    </div>
-                  </div>
-                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
-                    {[{l:"Total comprado",v:fmt(tC),c:C.yellow},{l:"Total abonado",v:fmt(tA),c:C.green}].map(s=>(
-                      <div key={s.l} style={{background:C.bg,borderRadius:9,padding:"10px 12px"}}>
-                        <div style={{fontSize:11,color:C.textDim}}>{s.l}</div>
-                        <div style={{fontSize:15,fontWeight:700,color:s.c}}>{s.v}</div>
-                      </div>
-                    ))}
-                  </div>
-                  {abonosProv.filter(a=>a.proveedor===prov.nombre).map(a=>(
-                    <div key={a.id} style={{display:"flex",justifyContent:"space-between",padding:"5px 0",borderBottom:`1px solid ${C.border}`,fontSize:12}}>
-                      <span style={{color:C.textDim}}>{a.fecha} · {a.nota}</span>
-                      <span style={{color:C.green,fontWeight:600}}>+{fmt(a.monto)}</span>
-                    </div>
-                  ))}
-                  {bodega.filter(b=>b.proveedor===prov.nombre).length>0&&(
-                    <div style={{marginTop:12,borderTop:`1px solid ${C.border}`,paddingTop:10}}>
-                      <div style={{fontSize:11,color:C.textDim,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:8}}>🏪 Entradas de bodega</div>
-                      {bodega.filter(b=>b.proveedor===prov.nombre).map(b=>{
-                        const td=(b.distribuciones||[]).reduce((s,d)=>s+d.cant,0);
-                        const dsp=disponibleDe(b);
-                        const pct=b.cant>0?Math.round((td/b.cant)*100):0;
-                        return(
-                          <div key={b.id} style={{background:"#f9fafb",borderRadius:9,padding:"10px 12px",marginBottom:8,border:`1px solid ${C.border}`}}>
-                            <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
-                              <div style={{fontWeight:600,fontSize:12,color:C.text}}>{b.mercancia} <span style={{color:C.textDim,fontWeight:400}}>· {b.fecha} · {fmt(b.unitario)}/u</span></div>
-                              <div style={{fontSize:12,fontWeight:700,color:C.yellow}}>{fmt(b.costoTotal)}</div>
-                            </div>
-                            <div style={{display:"flex",gap:8,marginBottom:6}}>
-                              {[{l:"Comprado",v:b.cant,c:C.text},{l:"Distribuido",v:td,c:C.green},{l:"Disponible",v:dsp,c:dsp>0?C.yellow:C.green}].map(s=>(
-                                <div key={s.l} style={{flex:1,textAlign:"center",background:"#fff",borderRadius:6,padding:"4px 0",border:`1px solid ${C.border}`}}>
-                                  <div style={{fontSize:9,color:C.textDim}}>{s.l}</div>
-                                  <div style={{fontWeight:700,fontSize:13,color:s.c}}>{s.v}</div>
-                                </div>
-                              ))}
-                            </div>
-                            <div style={{height:4,borderRadius:2,background:"#e5e7eb",overflow:"hidden"}}>
-                              <div style={{height:"100%",background:`linear-gradient(90deg,${C.green},#52525b)`,width:`${pct}%`}}/>
-                            </div>
-                          </div>
-                        );
-                      })}
                     </div>
                   )}
-                                    {(()=>{
-                    const bItems=bodega.filter(b=>b.proveedor===prov.nombre);
-                    if(!bItems.length) return null;
-                    return(
-                      <div style={{marginTop:12,borderTop:`1px solid ${C.border}`,paddingTop:10}}>
-                        <div style={{fontSize:11,color:C.textDim,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:8}}>🏪 Entradas de bodega</div>
-                        {bItems.map(b=>{
-                          const td=(b.distribuciones||[]).reduce((s,d)=>s+d.cant,0);
-                          const dsp=disponibleDe(b);
-                          const pct=b.cant>0?Math.round((td/b.cant)*100):0;
-                          return(
-                            <div key={b.id} style={{background:"#f9fafb",borderRadius:9,padding:"10px 12px",marginBottom:8,border:`1px solid ${C.border}`}}>
-                              <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
-                                <div style={{fontWeight:600,fontSize:12,color:C.text}}>{b.mercancia} <span style={{color:C.textDim,fontWeight:400}}>· {b.fecha} · {fmt(b.unitario)}/u</span></div>
-                                <div style={{fontSize:12,fontWeight:700,color:C.yellow}}>{fmt(b.costoTotal)}</div>
-                              </div>
-                              <div style={{display:"flex",gap:8,marginBottom:6}}>
-                                {[{l:"Comprado",v:b.cant,c:C.text},{l:"Distribuido",v:td,c:C.green},{l:"Disponible",v:dsp,c:dsp>0?C.yellow:C.green}].map(s=>(
-                                  <div key={s.l} style={{flex:1,textAlign:"center",background:"#fff",borderRadius:6,padding:"4px 0",border:`1px solid ${C.border}`}}>
-                                    <div style={{fontSize:9,color:C.textDim}}>{s.l}</div>
-                                    <div style={{fontWeight:700,fontSize:13,color:s.c}}>{s.v}</div>
-                                  </div>
-                                ))}
-                              </div>
-                              <div style={{height:4,borderRadius:2,background:"#e5e7eb",overflow:"hidden"}}>
-                                <div style={{height:"100%",background:`linear-gradient(90deg,${C.green},#52525b)`,width:`${pct}%`}}/>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    );
-                  })()}
-                  <button onClick={()=>{setAForm({fecha:new Date().toISOString().slice(0,10)});setModalAP(prov.nombre);}} style={{width:"100%",marginTop:12,padding:"9px 0",background:C.bg,border:`1px solid ${C.border}`,borderRadius:9,color:C.accent,fontSize:13,cursor:"pointer",fontWeight:600}}>
-                    + Registrar abono
-                  </button>
                 </div>
               );
             })}
           </div>
         </>)}
-
-        {/* ══ CLIENTES ══ */}
         {tab===2&&(<>
-          <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16,flexWrap:"wrap"}}>
-            <input value={cliSearch} onChange={e=>setCliSearch(e.target.value)} placeholder="🔍 Buscar cliente..." style={{...inp,flex:1,minWidth:160,maxWidth:280}}/>
-            <select value={cliSort} onChange={e=>setCliSort(e.target.value)} style={{...inp,width:"auto",paddingRight:28}}>
-              <option value="saldo">Mayor saldo</option>
-              <option value="saldoAsc">Menor saldo</option>
-              <option value="nombre">Nombre A–Z</option>
-              <option value="nombreDesc">Nombre Z–A</option>
-              <option value="pedidos">Más pedidos</option>
-              <option value="monto">Mayor monto total</option>
-            </select>
-            <button onClick={()=>{setEditCli(null);setNewNom("");setModalCli(true);}} style={{...btnP,padding:"9px 18px",fontSize:13}}>+ Nuevo cliente</button>
+          {/* Toolbar */}
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20,gap:12,flexWrap:"wrap"}}>
+            <div style={{display:"flex",gap:10,flex:1,minWidth:0}}>
+              <input value={cliSearch} onChange={e=>setCliSearch(e.target.value)} placeholder="Buscar cliente..." style={{...inp,flex:1,maxWidth:260}}/>
+              <select value={cliSort} onChange={e=>setCliSort(e.target.value)} style={{...inp,width:"auto"}}>
+                <option value="ultimoMod">Último modificado</option>
+                <option value="saldo">Mayor saldo</option>
+                <option value="saldoAsc">Menor saldo</option>
+                <option value="nombre">Nombre A–Z</option>
+                <option value="nombreDesc">Nombre Z–A</option>
+                <option value="pedidos">Más pedidos</option>
+                <option value="monto">Mayor monto total</option>
+              </select>
+            </div>
+            <button onClick={()=>{setEditCli(null);setNewNom("");setModalCli(true);}} style={{...btnP,padding:"9px 20px",fontSize:13,flexShrink:0}}>+ Nuevo cliente</button>
           </div>
-          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:14}}>
+
+          {/* Cards */}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
             {(()=>{
               const q=cliSearch.toLowerCase();
               let lista=[...clientes].filter(c=>!q||c.nombre.toLowerCase().includes(q));
-              if(cliSort==="saldo") lista.sort((a,b)=>(saldC[b.nombre]||0)-(saldC[a.nombre]||0));
+              if(cliSort==="ultimoMod") lista.sort((a,b)=>{const fechas=cli=>[...abonosCli.filter(x=>x.cliente===cli).map(x=>x.fecha),...pedidos.filter(x=>x.cliente===cli).map(x=>x.fecha)].filter(Boolean);const fa=fechas(a.nombre).sort().pop()||"0";const fb=fechas(b.nombre).sort().pop()||"0";return fb.localeCompare(fa);});
+              else if(cliSort==="saldo") lista.sort((a,b)=>(saldC[b.nombre]||0)-(saldC[a.nombre]||0));
               else if(cliSort==="saldoAsc") lista.sort((a,b)=>(saldC[a.nombre]||0)-(saldC[b.nombre]||0));
               else if(cliSort==="nombre") lista.sort((a,b)=>a.nombre.localeCompare(b.nombre));
               else if(cliSort==="nombreDesc") lista.sort((a,b)=>b.nombre.localeCompare(a.nombre));
@@ -1088,73 +1250,133 @@ export default function App(){
               return lista;
             })().map(cli=>{
               const saldo=saldC[cli.nombre]||0;
-              const pc=pedidos.filter(p=>p.cliente===cli.nombre);
+              const pc=pedidos.filter(p=>p.cliente===cli.nombre&&!p.esBodega);
               const tV=pc.reduce((s,p)=>s+(p.total||0),0);
               const tA=abonosCli.filter(a=>a.cliente===cli.nombre).reduce((s,a)=>s+a.monto,0);
+              const pendientes=pc.filter(p=>p.clientePago!=="PAGADO"&&p.clientePago!=="PAGADO TRANSFERENCIA");
+              const pagados=pc.filter(p=>p.clientePago==="PAGADO"||p.clientePago==="PAGADO TRANSFERENCIA");
+              const sp=tA-pagados.reduce((s,p)=>s+(p.total||0),0);
+              const pct=tV>0?Math.min(100,Math.round((tA/tV)*100)):0;
+              const initials=cli.nombre.split(" ").map(n=>n[0]).slice(0,2).join("");
+              const open=!!provOpenMap["cli_"+cli.id];
+              const toggleOpen=()=>setProvOpenMap(m=>({...m,["cli_"+cli.id]:!m["cli_"+cli.id]}));
               return(
-                <div key={cli.id} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:18,boxShadow:"0 1px 4px rgba(0,0,0,0.06)",minWidth:0}}>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:12,gap:6,minWidth:0}}>
-                    <div style={{display:"flex",alignItems:"center",gap:9,minWidth:0,flex:1}}>
-                      <div style={{width:36,height:36,borderRadius:"50%",background:`linear-gradient(135deg,${C.accent},${C.accent3})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:700,color:"#fff",flexShrink:0}}>
-                        {cli.nombre.split(" ").map(n=>n[0]).slice(0,2).join("")}
-                      </div>
+                <div key={cli.id} style={{background:"#ffffff",border:"1px solid #e7e5e4",borderRadius:16,overflow:"hidden"}}>
+
+                  {/* Header */}
+                  <div style={{padding:"18px 24px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:16,cursor:"pointer"}} onClick={toggleOpen}>
+                    <div style={{display:"flex",alignItems:"center",gap:14}}>
+                      <div style={{width:44,height:44,borderRadius:12,background:"#1c1917",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:700,color:"#fff",fontFamily:"'Outfit',sans-serif",flexShrink:0}}>{initials}</div>
                       <div>
-                        <div style={{fontFamily:"'Sora',sans-serif",fontSize:14,fontWeight:700,color:C.text,wordBreak:"break-word"}}>{cli.nombre}</div>
-                        <div style={{fontSize:11,color:C.textDim}}>{pc.length} pedidos</div>
+                        <div style={{fontSize:16,fontWeight:700,color:"#1c1917",fontFamily:"'Outfit',sans-serif",letterSpacing:"-0.2px"}}>{cli.nombre}</div>
+                        <div style={{fontSize:12,color:"#a8a29e",marginTop:2,fontFamily:"'Outfit',sans-serif"}}>{pc.length} pedidos · {pendientes.length} pendientes</div>
                       </div>
                     </div>
-                    <div style={{display:"flex",alignItems:"center",gap:6}}>
-                      <div style={{textAlign:"right",flexShrink:0,maxWidth:130}}>
-                        <div style={{fontSize:10,color:C.textDim}}>Saldo</div>
-                        <div style={{fontFamily:"'Sora',sans-serif",fontSize:16,fontWeight:700,color:gColor(saldo)}}>{fmt(saldo)}</div>
+                    <div style={{display:"flex",alignItems:"center",gap:16}}>
+                      <div style={{textAlign:"right"}}>
+                        <div style={{fontSize:11,color:"#a8a29e",textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:2}}>Saldo</div>
+                        <div style={{fontSize:20,fontWeight:800,color:saldo>0?"#dc2626":saldo<0?"#16a34a":"#a8a29e",fontFamily:"'Outfit',sans-serif",letterSpacing:"-0.4px"}}>{fmt(saldo)}</div>
                       </div>
-                      <div style={{display:"flex",flexDirection:"column",gap:4}}>
-                        <button onClick={()=>{setNewNom(cli.nombre);setEditCli(cli);setModalCli(true);}} style={{background:"#f5f5f5",border:`1px solid ${C.border}`,borderRadius:6,padding:"3px 7px",cursor:"pointer",fontSize:11}}>✏️</button>
-                        <button onClick={()=>setClientes(prev=>prev.filter(c=>c.id!==cli.id))} style={{background:"#fff0f0",border:`1px solid #fecaca`,borderRadius:6,padding:"3px 7px",cursor:"pointer",fontSize:11}}>🗑</button>
-                      </div>
+                      <div style={{fontSize:18,color:"#a8a29e",transform:open?"rotate(180deg)":"none",transition:"transform .2s"}}>▾</div>
                     </div>
                   </div>
-                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}}>
-                    {[{l:"Total vendido",v:fmt(tV),c:C.blue},{l:"Total recibido",v:fmt(tA),c:C.green}].map(s=>(
-                      <div key={s.l} style={{background:C.bg,borderRadius:8,padding:"8px 10px"}}>
-                        <div style={{fontSize:10,color:C.textDim}}>{s.l}</div>
-                        <div style={{fontSize:14,fontWeight:700,color:s.c}}>{s.v}</div>
-                      </div>
-                    ))}
+
+                  {/* Stats */}
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:1,background:"#f5f5f4"}}>
+                    <div style={{background:"#fff7ed",padding:"12px 20px"}}>
+                      <div style={{fontSize:10,color:"#92400e",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:3,fontFamily:"'Outfit',sans-serif"}}>Total vendido</div>
+                      <div style={{fontSize:17,fontWeight:800,color:"#92400e",fontFamily:"'Outfit',sans-serif"}}>{fmt(tV)}</div>
+                    </div>
+                    <div style={{background:"#f0fdf4",padding:"12px 20px"}}>
+                      <div style={{fontSize:10,color:"#166534",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:3,fontFamily:"'Outfit',sans-serif"}}>Total recibido</div>
+                      <div style={{fontSize:17,fontWeight:800,color:"#16a34a",fontFamily:"'Outfit',sans-serif"}}>{fmt(tA)}</div>
+                    </div>
+                    <div style={{background:saldo>0?"#fff1f2":"#f0fdf4",padding:"12px 20px"}}>
+                      <div style={{fontSize:10,color:saldo>0?"#9f1239":"#166534",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:3,fontFamily:"'Outfit',sans-serif"}}>{saldo>0?"Por cobrar":"Al corriente"}</div>
+                      <div style={{fontSize:17,fontWeight:800,color:saldo>0?"#dc2626":"#16a34a",fontFamily:"'Outfit',sans-serif"}}>{fmt(Math.abs(saldo))}</div>
+                    </div>
                   </div>
-                  {abonosCli.filter(a=>a.cliente===cli.nombre).sort((a,b)=>b.fecha.localeCompare(a.fecha)).map(a=>(
-                    <div key={a.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"4px 0",borderBottom:`1px solid ${C.border}`,fontSize:12}}>
-                      <span style={{color:C.textDim}}>{a.fecha}{a.nota?` · ${a.nota}`:""}</span>
-                      <div style={{display:"flex",alignItems:"center",gap:6}}>
-                        <span style={{color:C.green,fontWeight:600}}>+{fmt(a.monto)}</span>
-                        <button onClick={()=>{setAForm({fecha:a.fecha,monto:a.monto,nota:a.nota||"",_editId:a.id});setModalAC(cli.nombre);}} style={{background:"#f4f4f5",border:`1px solid ${C.border}`,borderRadius:4,padding:"1px 6px",cursor:"pointer",fontSize:10,color:C.textMid}}>✏️</button>
-                        <button onClick={()=>{
-                          if(!confirm("¿Eliminar este abono?"))return;
-                          const ab=abonosCli.find(x=>x.id===a.id);
-                          setAbonosCli(p=>p.filter(x=>x.id!==a.id));
-                          if(ab?.flujoId) setFlujo(p=>p.filter(f=>f.id!==ab.flujoId));
-                        }} style={{background:"#fff0f0",border:"1px solid #fecaca",borderRadius:4,padding:"1px 6px",cursor:"pointer",fontSize:10,color:C.red}}>✕</button>
+
+                  {/* Progress bar */}
+                  {tV>0&&(
+                    <div style={{padding:"8px 24px",background:"#fafaf9",borderBottom:"1px solid #f5f5f4",display:"flex",alignItems:"center",gap:12}}>
+                      <div style={{flex:1,height:5,background:"#e7e5e4",borderRadius:99,overflow:"hidden"}}>
+                        <div style={{height:"100%",width:`${pct}%`,background:pct>=100?"#16a34a":"#d97706",borderRadius:99}}/>
+                      </div>
+                      <span style={{fontSize:12,fontWeight:600,color:pct>=100?"#16a34a":"#d97706",fontFamily:"'Outfit',sans-serif",flexShrink:0}}>{pct}% pagado</span>
+                    </div>
+                  )}
+
+                  {/* Expandible */}
+                  {open&&(
+                    <div>
+                      {/* Pedidos pendientes */}
+                      {pendientes.length>0&&(
+                        <div style={{padding:"14px 24px",borderTop:"1px solid #f5f5f4"}}>
+                          <div style={{fontSize:11,fontWeight:600,color:"#a8a29e",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:10,fontFamily:"'Outfit',sans-serif"}}>Pedidos pendientes</div>
+                          <table style={{width:"100%",borderCollapse:"collapse"}}>
+                            <thead><tr>{["#","Mercancía","Cant.","Total","Abonado","Resta","Estado"].map(h=>(<th key={h} style={{fontSize:10,fontWeight:600,color:"#a8a29e",textAlign:"left",padding:"0 8px 8px 0",textTransform:"uppercase",letterSpacing:"0.06em",fontFamily:"'Outfit',sans-serif"}}>{h}</th>))}</tr></thead>
+                            <tbody>
+                              {pendientes.map(p=>{
+                                const asig=p.montoAsignado||0;
+                                const resta=(p.total||0)-asig;
+                                return(
+                                  <tr key={p.id} style={{borderTop:"1px solid #f5f5f4"}}>
+                                    <td style={{padding:"8px 8px 8px 0",fontSize:12,color:"#a8a29e"}}>#{p.id}</td>
+                                    <td style={{padding:"8px 8px 8px 0",fontSize:13,fontWeight:500,color:"#1c1917",fontFamily:"'Outfit',sans-serif"}}>{p.mercancia}</td>
+                                    <td style={{padding:"8px 8px 8px 0",fontSize:12,color:"#78716c"}}>{p.cant}</td>
+                                    <td style={{padding:"8px 8px 8px 0",fontSize:12,fontWeight:600,color:"#1c1917"}}>{fmt(p.total)}</td>
+                                    <td style={{padding:"8px 8px 8px 0",fontSize:12,color:"#16a34a",fontWeight:600}}>{asig>0?fmt(asig):"—"}</td>
+                                    <td style={{padding:"8px 8px 8px 0",fontSize:12,fontWeight:700,color:"#dc2626"}}>{resta>0?fmt(resta):"—"}</td>
+                                    <td style={{padding:"8px 0"}}><span style={{background:p.clientePago==="ABONO PARCIAL"?"#fef3c7":"#fee2e2",color:p.clientePago==="ABONO PARCIAL"?"#92400e":"#b91c1c",fontSize:10,fontWeight:600,padding:"2px 8px",borderRadius:20}}>{p.clientePago||"Pendiente"}</span></td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+
+                      {/* Pagos recibidos */}
+                      {abonosCli.filter(a=>a.cliente===cli.nombre).length>0&&(
+                        <div style={{padding:"14px 24px",borderTop:"1px solid #f5f5f4"}}>
+                          <div style={{fontSize:11,fontWeight:600,color:"#a8a29e",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:10,fontFamily:"'Outfit',sans-serif"}}>Pagos recibidos</div>
+                          {abonosCli.filter(a=>a.cliente===cli.nombre).sort((a,b)=>b.fecha.localeCompare(a.fecha)).map(a=>(
+                            <div key={a.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 0",borderTop:"1px solid #f5f5f4"}}>
+                              <div>
+                                <span style={{fontSize:13,color:"#1c1917",fontFamily:"'Outfit',sans-serif"}}>{a.fecha}</span>
+                                {a.nota&&<span style={{fontSize:12,color:"#a8a29e",marginLeft:8}}>{a.nota}</span>}
+                              </div>
+                              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                                <span style={{fontSize:14,fontWeight:700,color:"#16a34a",fontFamily:"'Outfit',sans-serif"}}>+{fmt(a.monto)}</span>
+                                <button onClick={e=>{e.stopPropagation();setAForm({fecha:a.fecha,monto:a.monto,nota:a.nota||"",_editId:a.id});setModalAC(cli.nombre);}} style={{background:"#f5f5f4",border:"1px solid #e7e5e4",borderRadius:6,padding:"3px 8px",cursor:"pointer",fontSize:11,color:"#78716c"}}>✏️</button>
+                                <button onClick={e=>{e.stopPropagation();if(!confirm("¿Eliminar este abono?"))return;const ab=abonosCli.find(x=>x.id===a.id);setAbonosCli(p=>p.filter(x=>x.id!==a.id));if(ab?.flujoId)setFlujo(p=>p.filter(f=>f.id!==ab.flujoId));}} style={{background:"#fff1f2",border:"1px solid #fecdd3",borderRadius:6,padding:"3px 8px",cursor:"pointer",fontSize:11,color:"#e11d48"}}>✕</button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Acciones */}
+                      <div style={{padding:"14px 24px",borderTop:"1px solid #f5f5f4",display:"flex",gap:10,flexWrap:"wrap"}}>
+                        <button onClick={e=>{e.stopPropagation();setModalEstadoCli(cli.nombre);}} style={{padding:"9px 18px",background:"#f5f5f4",border:"1px solid #e7e5e4",borderRadius:10,color:"#44403c",fontSize:13,cursor:"pointer",fontFamily:"'Outfit',sans-serif"}}>📋 Estado de cuenta</button>
+                        <button onClick={e=>{e.stopPropagation();setAForm({fecha:new Date().toISOString().slice(0,10)});setModalAC(cli.nombre);}} style={{padding:"9px 18px",background:"#1c1917",border:"none",borderRadius:10,color:"#fff",fontSize:13,cursor:"pointer",fontWeight:600,fontFamily:"'Outfit',sans-serif"}}>+ Registrar pago</button>
+                        {sp>0&&<button onClick={e=>{e.stopPropagation();setModalDistribuir(cli.nombre);}} style={{padding:"9px 18px",background:"#eff6ff",border:"1px solid #bfdbfe",borderRadius:10,color:"#1d4ed8",fontSize:13,cursor:"pointer",fontWeight:600,fontFamily:"'Outfit',sans-serif"}}>💸 Distribuir — {fmt(sp)}</button>}
+                        <button onClick={e=>{e.stopPropagation();setNewNom(cli.nombre);setEditCli(cli);setModalCli(true);}} style={{padding:"9px 18px",background:"#f5f5f4",border:"1px solid #e7e5e4",borderRadius:10,color:"#44403c",fontSize:13,cursor:"pointer",fontFamily:"'Outfit',sans-serif"}}>✏️</button>
+                        <button onClick={e=>{e.stopPropagation();setClientes(prev=>prev.filter(c=>c.id!==cli.id));}} style={{padding:"9px 18px",background:"#fff1f2",border:"1px solid #fecdd3",borderRadius:10,color:"#e11d48",fontSize:13,cursor:"pointer",fontFamily:"'Outfit',sans-serif"}}>🗑</button>
                       </div>
                     </div>
-                  ))}
-                  <div style={{display:"flex",flexDirection:"column",gap:6,marginTop:10}}>
-                    <div style={{display:"flex",gap:6}}>
-                      <button onClick={()=>setModalEstadoCli(cli.nombre)} style={{flex:1,padding:"7px 0",background:"#f4f4f5",border:`1px solid ${C.border}`,borderRadius:8,color:C.accent,fontSize:11,cursor:"pointer",fontWeight:600,overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis",minWidth:0}}>📋 Estado</button>
-                      <button onClick={()=>{setAForm({fecha:new Date().toISOString().slice(0,10)});setModalAC(cli.nombre);}} style={{flex:2,padding:"8px 0",background:C.bg,border:`1px solid ${C.border}`,borderRadius:8,color:C.accent,fontSize:12,cursor:"pointer",fontWeight:600,overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis",minWidth:0}}>+ Registrar pago</button>
-                    </div>
-                    {(()=>{const sp=abonosCli.filter(a=>a.cliente===cli.nombre).reduce((s,a)=>s+a.monto,0)-pedidos.filter(p=>p.cliente===cli.nombre&&(p.clientePago==="PAGADO"||p.clientePago==="PAGADO TRANSFERENCIA")).reduce((s,p)=>s+(p.total||0),0);return sp>0?(<button onClick={()=>setModalDistribuir(cli.nombre)} style={{width:"100%",padding:"8px 0",background:"#eff6ff",border:"1px solid #bfdbfe",borderRadius:8,color:"#1d4ed8",fontSize:12,cursor:"pointer",fontWeight:700,overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis"}}>💸 Distribuir saldo — {fmt(sp)} disponible</button>):null;})()}
-                  </div>
+                  )}
+
                 </div>
               );
             })}
           </div>
         </>)}
-
-        {/* ══ RESUMEN ══ */}
         {tab===3&&(
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:20}}>
             <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:20}}>
-              <div style={{fontFamily:"'Sora',sans-serif",fontSize:16,color:C.accent3,marginBottom:14}}>🏭 Debes a proveedores</div>
+              <div style={{fontFamily:"'Outfit',sans-serif",fontSize:16,color:C.accent3,marginBottom:14}}>🏭 Debes a proveedores</div>
               {proveedores.map(prov=>{const s=saldP[prov.nombre]||0;return(
                 <div key={prov.id} style={{display:"flex",justifyContent:"space-between",padding:"10px 0",borderBottom:`1px solid ${C.border}`}}>
                   <span style={{color:C.textMid,fontWeight:500}}>{prov.nombre}</span>
@@ -1167,7 +1389,7 @@ export default function App(){
               </div>
             </div>
             <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:20}}>
-              <div style={{fontFamily:"'Sora',sans-serif",fontSize:16,color:C.green,marginBottom:14}}>👥 Te deben los clientes</div>
+              <div style={{fontFamily:"'Outfit',sans-serif",fontSize:16,color:C.green,marginBottom:14}}>👥 Te deben los clientes</div>
               {clientes.filter(c=>saldC[c.nombre]&&saldC[c.nombre]!==0).sort((a,b)=>(saldC[b.nombre]||0)-(saldC[a.nombre]||0)).map(cli=>{const s=saldC[cli.nombre]||0;return(
                 <div key={cli.id} style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderBottom:`1px solid ${C.border}`}}>
                   <span style={{color:C.textMid,fontSize:13}}>{cli.nombre}</span>
@@ -1180,7 +1402,7 @@ export default function App(){
               </div>
             </div>
             <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:20,gridColumn:"span 2"}}>
-              <div style={{fontFamily:"'Sora',sans-serif",fontSize:16,color:C.textMid,marginBottom:14}}>📈 Ganancia por proveedor</div>
+              <div style={{fontFamily:"'Outfit',sans-serif",fontSize:16,color:C.textMid,marginBottom:14}}>📈 Ganancia por proveedor</div>
               <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:12}}>
                 {proveedores.map(prov=>{const g=pedidos.filter(p=>p.proveedor===prov.nombre).reduce((s,p)=>s+(p.total-p.costo-(p.otroCosto||0)),0);return(
                   <div key={prov.id} style={{background:C.bg,borderRadius:10,padding:"14px 16px"}}>
@@ -1232,7 +1454,7 @@ export default function App(){
             ))}
           </div>
           <div style={{display:"flex",gap:10,marginTop:6}}>
-            <button onClick={()=>setModalPed(null)} style={{flex:1,padding:"10px 0",background:"transparent",border:`1px solid ${C.border2}`,borderRadius:9,color:C.textDim,fontFamily:"'DM Sans',sans-serif",cursor:"pointer"}}>Cancelar</button>
+            <button onClick={()=>setModalPed(null)} style={{flex:1,padding:"10px 0",background:"transparent",border:`1px solid ${C.border2}`,borderRadius:9,color:C.textDim,fontFamily:"'Outfit',sans-serif",cursor:"pointer"}}>Cancelar</button>
             <button onClick={savePed} style={{...btnP,flex:2,padding:"10px 0",fontSize:14}}>Guardar pedido</button>
           </div>
         </Modal>
@@ -1240,233 +1462,165 @@ export default function App(){
 
       {/* ══ BODEGA ══ */}
 {tab===5&&(<>
-  <div style={{display:"flex",gap:10,marginBottom:16,flexWrap:"wrap",alignItems:"center"}}>
-    <input value={bSearch} onChange={e=>setBSearch(e.target.value)} placeholder="🔍 Buscar mercancía..." style={{...inp,flex:1,minWidth:180,padding:"8px 12px",fontSize:13}}/>
-    <select value={bFiltProv} onChange={e=>setBFiltProv(e.target.value)} style={{...inp,width:"auto",padding:"8px 12px",fontSize:13}}>
-      <option value="Todos">Todos los proveedores</option>
-      {proveedores.sort((a,b)=>a.nombre.localeCompare(b.nombre)).map(p=><option key={p.id} value={p.nombre}>{p.nombre}</option>)}
-    </select>
-    <select value={bFiltDist} onChange={e=>setBFiltDist(e.target.value)} style={{...inp,width:"auto",padding:"8px 12px",fontSize:13}}>
-      <option value="Todos">Todo</option>
-      <option value="Pendiente">Con pendiente</option>
-      <option value="Completo">Distribuido completo</option>
-    </select>
-    <button onClick={()=>{setBForm({fecha:new Date().toISOString().slice(0,10),proveedor:proveedores[0]?.nombre||""});setModalBodega("new");}} style={{...btnP,padding:"9px 18px",fontSize:13,whiteSpace:"nowrap"}}>+ Nueva entrada</button>
-  </div>
-  {bodega.length===0?(
-    <div style={{textAlign:"center",padding:"60px 0",color:C.textDim,background:C.card,borderRadius:14,border:`1px solid ${C.border}`}}>
-      <div style={{fontSize:40,marginBottom:12}}>🏪</div>
-      <div style={{fontSize:15,fontWeight:600,marginBottom:6}}>Bodega vacía</div>
-      <div style={{fontSize:13}}>Registra compras grandes para distribuirlas entre clientes.</div>
-    </div>
-  ):(
-    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(340px,1fr))",gap:16}}>
-      {bodega.filter(item=>{
-        const dsp=disponibleDe(item);
-        return(!bSearch||item.mercancia.toLowerCase().includes(bSearch.toLowerCase()))
-          &&(bFiltProv==="Todos"||item.proveedor===bFiltProv)
-          &&enPeriodo(item.fecha)
-          &&(bFiltDist==="Todos"||(bFiltDist==="Pendiente"&&dsp>0)||(bFiltDist==="Completo"&&dsp===0));
-      }).map(item=>{
-        const td=(item.distribuciones||[]).reduce((s,d)=>s+d.cant,0);
-        const tm=(item.mermas||[]).reduce((s,m)=>s+m.cant,0);
-        const dsp=disponibleDe(item);
-        const pct=item.cant>0?Math.round((td/item.cant)*100):0;
-        return(
-          <div key={item.id} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,overflow:"hidden",boxShadow:"0 1px 4px rgba(0,0,0,0.06)"}}>
-            <div style={{padding:"16px 18px",background:"linear-gradient(135deg,#09090b 0%,#27272a 100%)",color:"#fff"}}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
-                <div>
-                  <div style={{fontSize:14,fontWeight:700,letterSpacing:"0.02em"}}>{item.mercancia}</div>
-                  <div style={{fontSize:11,opacity:0.75,marginTop:2}}>{item.proveedor} · {item.fecha}</div>
-                </div>
-                <div style={{display:"flex",gap:6}}>
-                  <button onClick={()=>{setBForm({fecha:item.fecha,proveedor:item.proveedor,mercancia:item.mercancia,cant:item.cant,unitario:item.unitario,notas:item.notas||"",_editId:item.id});setModalBodega("edit");}} style={{background:"rgba(255,255,255,0.15)",border:"none",borderRadius:6,padding:"4px 8px",cursor:"pointer",color:"#fff",fontSize:12}}>✏️</button>
-                  <button onClick={()=>{if(!confirm("¿Eliminar?"))return;setBodega(p=>p.filter(b=>b.id!==item.id));setPedidos(p=>p.filter(x=>x.id!==item.pedidoProvId&&!(item.distribuciones||[]).find(d=>d.pedidoId===x.id)));}} style={{background:"rgba(255,255,255,0.15)",border:"none",borderRadius:6,padding:"4px 8px",cursor:"pointer",color:"#fff",fontSize:12}}>🗑</button>
-                </div>
-              </div>
-              <div style={{marginTop:12,display:"flex",gap:10,alignItems:"center"}}>
-                <div style={{display:"inline-flex",alignItems:"center",gap:6,background:"rgba(255,255,255,0.15)",borderRadius:8,padding:"6px 12px"}}>
-                  <span style={{fontSize:10,opacity:0.8,textTransform:"uppercase",letterSpacing:"0.06em"}}>Costo unit.</span>
-                  <span style={{fontSize:20,fontWeight:800,color:"#ffd700"}}>{fmt(item.unitario)}</span>
-                </div>
-                <div style={{display:"inline-flex",alignItems:"center",gap:6,background:"rgba(255,255,255,0.10)",borderRadius:8,padding:"6px 12px"}}>
-                  <span style={{fontSize:10,opacity:0.7,textTransform:"uppercase",letterSpacing:"0.06em"}}>Total</span>
-                  <span style={{fontSize:14,fontWeight:700,color:"rgba(255,255,255,0.9)"}}>{fmt(item.costoTotal)}</span>
-                </div>
-              </div>
+          {/* Toolbar */}
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20,gap:12,flexWrap:"wrap"}}>
+            <div style={{display:"flex",gap:10,flex:1,minWidth:0}}>
+              <input value={bSearch} onChange={e=>setBSearch(e.target.value)} placeholder="Buscar mercancía..." style={{...inp,flex:1,maxWidth:260}}/>
+              <select value={bFiltProv} onChange={e=>setBFiltProv(e.target.value)} style={{...inp,width:"auto"}}>
+                <option value="Todos">Todos los proveedores</option>
+                {proveedores.sort((a,b)=>a.nombre.localeCompare(b.nombre)).map(p=><option key={p.id} value={p.nombre}>{p.nombre}</option>)}
+              </select>
+              <select value={bFiltDist} onChange={e=>setBFiltDist(e.target.value)} style={{...inp,width:"auto"}}>
+                <option value="Todos">Todo</option>
+                <option value="Pendiente">Con disponible</option>
+                <option value="Completo">Distribuido completo</option>
+              </select>
+              <select value={bSort||"ultimoMod"} onChange={e=>setBSort(e.target.value)} style={{...inp,width:"auto"}}>
+                <option value="ultimoMod">Último modificado</option>
+                <option value="nombre">Nombre A–Z</option>
+                <option value="prov">Por proveedor</option>
+                <option value="disponible">Mayor disponible</option>
+              </select>
             </div>
-            <div style={{padding:"14px 18px"}}>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:8,marginBottom:12}}>
-                {[{l:"Comprado",v:item.cant,bg:"#f9fafb",c:C.text},{l:"Distribuido",v:td,bg:"#f0fdf4",c:C.green},{l:"Merma",v:tm,bg:"#fff7ed",c:C.yellow}].map(s=>(
-                  <div key={s.l} style={{textAlign:"center",background:s.bg,borderRadius:8,padding:"8px 4px"}}>
-                    <div style={{fontSize:9,color:C.textDim}}>{s.l}</div>
-                    <div style={{fontWeight:700,fontSize:15,color:s.c}}>{s.v}</div>
-                  </div>
-                ))}
-                <div style={{textAlign:"center",background:dsp>0?"#fefce8":"#f0fdf4",borderRadius:8,padding:"8px 4px",border:`1px solid ${dsp>0?"#fde68a":"#bbf7d0"}`}}>
-                  <div style={{fontSize:9,color:C.textDim}}>Disponible</div>
-                  <div style={{fontWeight:700,fontSize:15,color:dsp>0?C.yellow:C.green}}>{dsp}</div>
-                </div>
-              </div>
-              <div style={{height:6,borderRadius:3,background:"#e5e7eb",overflow:"hidden",marginBottom:12}}>
-                <div style={{height:"100%",borderRadius:3,background:`linear-gradient(90deg,${C.green},#52525b)`,width:`${pct}%`}}/>
-              </div>
-              {(item.distribuciones||[]).length>0&&(
-                <div style={{marginBottom:8}}>
-                  {(item.distribuciones||[]).map(d=>(
-                    <div key={d.id} style={{display:"flex",justifyContent:"space-between",fontSize:11,padding:"4px 0",borderBottom:`1px solid ${C.border}`}}>
-                      <span style={{color:C.textMid}}>{d.cliente} · {d.cant} uds · {fmt(d.total)}</span>
-                      <div style={{display:"flex",gap:6,alignItems:"center"}}>
-                        <span style={{color:C.blue}}>#{d.pedidoId}</span>
-                        <button onClick={()=>{
-                          if(!confirm("¿Eliminar esta distribución?"))return;
-                          const newDists=(item.distribuciones||[]).filter(x=>x.id!==d.id);
-                          const pendientes=item.cant-newDists.reduce((s,x)=>s+x.cant,0);
-                          setBodega(p=>p.map(b=>b.id===item.id?{...b,distribuciones:newDists}:b));
-                          setPedidos(p=>{
-                            const sinEste=p.filter(x=>x.id!==d.pedidoId);
-                            const yaExisteProv=sinEste.find(x=>x.id===item.pedidoProvId);
-                            if(pendientes>0&&!yaExisteProv){
-                              return [...sinEste,{id:item.pedidoProvId,proveedor:item.proveedor,cliente:"BODEGA",mercancia:item.mercancia,cant:pendientes,unitario:item.unitario,otroCosto:0,precioPublico:0,costo:pendientes*item.unitario,total:0,fecha:item.fecha,vendedor:"",clientePago:"N/A",recibido:"N/A",pagadoProveedor:"",bodegaId:item.id,esBodega:true}];
-                            } else if(pendientes>0&&yaExisteProv){
-                              return sinEste.map(x=>x.id===item.pedidoProvId?{...x,cant:pendientes,costo:pendientes*item.unitario}:x);
-                            }
-                            return sinEste;
-                          });
-                        }} style={{background:"#fff0f0",border:"1px solid #fecaca",borderRadius:4,padding:"1px 5px",cursor:"pointer",fontSize:10,color:C.red}}>✕</button>
+            <button onClick={()=>{setBForm({fecha:new Date().toISOString().slice(0,10),proveedor:proveedores[0]?.nombre||""});setModalBodega("new");}} style={{...btnP,padding:"9px 20px",fontSize:13,flexShrink:0}}>+ Nueva entrada</button>
+          </div>
+
+          {/* Cards */}
+          {bodega.length===0?(
+            <div style={{textAlign:"center",padding:"60px 0",color:"#a8a29e",background:"#ffffff",borderRadius:16,border:"1px solid #e7e5e4"}}>
+              <div style={{fontSize:36,marginBottom:12}}>🏪</div>
+              <div style={{fontSize:15,fontWeight:600,color:"#1c1917",marginBottom:6,fontFamily:"'Outfit',sans-serif"}}>Bodega vacía</div>
+              <div style={{fontSize:13,fontFamily:"'Outfit',sans-serif"}}>Registra compras grandes para distribuirlas entre clientes.</div>
+            </div>
+          ):(
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+              {[...bodega].filter(item=>{
+                const dsp=disponibleDe(item);
+                return(!bSearch||item.mercancia.toLowerCase().includes(bSearch.toLowerCase()))
+                  &&(bFiltProv==="Todos"||item.proveedor===bFiltProv)
+                  &&enPeriodo(item.fecha)
+                  &&(bFiltDist==="Todos"||(bFiltDist==="Pendiente"&&dsp>0)||(bFiltDist==="Completo"&&dsp===0));
+              }).sort((a,b)=>{
+                if((bSort||"ultimoMod")==="ultimoMod") return (b.fecha||"0").localeCompare(a.fecha||"0");
+                if(bSort==="nombre") return a.mercancia.localeCompare(b.mercancia);
+                if(bSort==="prov") return a.proveedor.localeCompare(b.proveedor);
+                if(bSort==="disponible") return disponibleDe(b)-disponibleDe(a);
+                return 0;
+              }).map(item=>{
+                const td=(item.distribuciones||[]).reduce((s,d)=>s+d.cant,0);
+                const tm=(item.mermas||[]).reduce((s,m)=>s+m.cant,0);
+                const dsp=disponibleDe(item);
+                const pct=item.cant>0?Math.round((td/item.cant)*100):0;
+                const open=!!provOpenMap["bod_"+item.id];
+                const toggleOpen=()=>setProvOpenMap(m=>({...m,["bod_"+item.id]:!m["bod_"+item.id]}));
+                return(
+                  <div key={item.id} style={{background:"#ffffff",border:"1px solid #e7e5e4",borderRadius:16,overflow:"hidden"}}>
+
+                    {/* Header */}
+                    <div style={{padding:"18px 24px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:16,cursor:"pointer"}} onClick={toggleOpen}>
+                      <div style={{flex:1,minWidth:0}}>
+                        <div style={{fontSize:16,fontWeight:700,color:"#1c1917",fontFamily:"'Outfit',sans-serif",letterSpacing:"-0.2px",marginBottom:3}}>{item.mercancia}</div>
+                        <div style={{fontSize:12,color:"#a8a29e",fontFamily:"'Outfit',sans-serif"}}>{item.proveedor} · {item.fecha} · {fmt(item.unitario)}/u</div>
+                      </div>
+                      <div style={{display:"flex",alignItems:"center",gap:16}}>
+                        <div style={{textAlign:"right"}}>
+                          <div style={{fontSize:11,color:"#a8a29e",marginBottom:1}}>Costo total</div>
+                          <div style={{fontSize:18,fontWeight:800,color:"#92400e",fontFamily:"'Outfit',sans-serif"}}>{fmt(item.costoTotal)}</div>
+                        </div>
+                        <div style={{fontSize:18,color:"#a8a29e",transform:open?"rotate(180deg)":"none",transition:"transform .2s"}}>▾</div>
                       </div>
                     </div>
-                  ))}
-                </div>
-              )}
-              {(item.mermas||[]).length>0&&(
-                <div style={{display:"flex",flexWrap:"wrap",gap:4,marginBottom:8}}>
-                  {(item.mermas||[]).map(m=>(
-                    <span key={m.id} style={{display:"inline-flex",alignItems:"center",gap:4,fontSize:10,background:"#fef3c7",color:"#92400e",border:"1px solid #fde68a",borderRadius:20,padding:"2px 8px"}}>
-                      {m.cant} — {m.tipo}
-                      <button onClick={()=>setEditMerma({bodegaId:item.id,mermaId:m.id,cant:m.cant,tipo:m.tipo,nota:m.nota||""})} style={{background:"none",border:"none",cursor:"pointer",fontSize:9,padding:"0 2px",color:"#92400e",lineHeight:1}}>✏️</button>
-                      <button onClick={()=>{if(!confirm("¿Eliminar esta merma?"))return;setBodega(p=>p.map(b=>b.id===item.id?{...b,mermas:(b.mermas||[]).filter(x=>x.id!==m.id)}:b));}} style={{background:"none",border:"none",cursor:"pointer",fontSize:9,padding:"0 2px",color:C.red,lineHeight:1}}>✕</button>
-                    </span>
-                  ))}
-                </div>
-              )}
-              <button onClick={()=>{setDForm({fecha:new Date().toISOString().slice(0,10)});setModalDist(item.id);}} style={{...btnP,width:"100%",padding:"8px 0",fontSize:12}}>+ Distribuir / Merma</button>
+
+                    {/* Stats */}
+                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:1,background:"#f5f5f4"}}>
+                      {[
+                        {l:"Comprado",v:item.cant,bg:"#fafaf9",c:"#1c1917"},
+                        {l:"Distribuido",v:td,bg:"#f0fdf4",c:"#16a34a"},
+                        {l:"Merma",v:tm,bg:"#fff7ed",c:"#d97706"},
+                        {l:"Disponible",v:dsp,bg:dsp>0?"#fffbeb":"#f0fdf4",c:dsp>0?"#d97706":"#16a34a"},
+                      ].map(s=>(
+                        <div key={s.l} style={{background:s.bg,padding:"12px 16px",textAlign:"center"}}>
+                          <div style={{fontSize:10,color:"#a8a29e",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:4,fontFamily:"'Outfit',sans-serif"}}>{s.l}</div>
+                          <div style={{fontSize:20,fontWeight:800,color:s.c,fontFamily:"'Outfit',sans-serif"}}>{s.v}</div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Progress */}
+                    <div style={{padding:"8px 24px",background:"#fafaf9",borderBottom:"1px solid #f5f5f4",display:"flex",alignItems:"center",gap:12}}>
+                      <div style={{flex:1,height:5,background:"#e7e5e4",borderRadius:99,overflow:"hidden"}}>
+                        <div style={{height:"100%",width:`${pct}%`,background:pct>=100?"#16a34a":"#d97706",borderRadius:99}}/>
+                      </div>
+                      <span style={{fontSize:12,fontWeight:600,color:pct>=100?"#16a34a":"#d97706",fontFamily:"'Outfit',sans-serif",flexShrink:0}}>{pct}% distribuido</span>
+                    </div>
+
+                    {/* Expandible */}
+                    {open&&(
+                      <div>
+                        {/* Distribuciones */}
+                        {(item.distribuciones||[]).length>0&&(
+                          <div style={{padding:"14px 24px",borderTop:"1px solid #f5f5f4"}}>
+                            <div style={{fontSize:11,fontWeight:600,color:"#a8a29e",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:10,fontFamily:"'Outfit',sans-serif"}}>Distribuciones ({(item.distribuciones||[]).length})</div>
+                            {(item.distribuciones||[]).map(d=>(
+                              <div key={d.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 0",borderTop:"1px solid #f5f5f4"}}>
+                                <div>
+                                  <span style={{fontSize:13,fontWeight:500,color:"#1c1917",fontFamily:"'Outfit',sans-serif"}}>{d.cliente}</span>
+                                  <span style={{fontSize:12,color:"#a8a29e",marginLeft:8}}>{d.cant} uds · {d.fecha}</span>
+                                </div>
+                                <div style={{display:"flex",alignItems:"center",gap:8}}>
+                                  <span style={{fontSize:13,fontWeight:700,color:"#2563eb",fontFamily:"'Outfit',sans-serif"}}>{fmt(d.total)}</span>
+                                  <span style={{fontSize:11,color:"#a8a29e"}}>#{d.pedidoId}</span>
+                                  <button onClick={e=>{e.stopPropagation();if(!confirm("¿Eliminar esta distribución?"))return;const newDists=(item.distribuciones||[]).filter(x=>x.id!==d.id);const pendientes=item.cant-newDists.reduce((s,x)=>s+x.cant,0);setBodega(p=>p.map(b=>b.id===item.id?{...b,distribuciones:newDists}:b));setPedidos(p=>{const sinEste=p.filter(x=>x.id!==d.pedidoId);const yaExisteProv=sinEste.find(x=>x.id===item.pedidoProvId);if(pendientes>0&&!yaExisteProv){return[...sinEste,{id:item.pedidoProvId,proveedor:item.proveedor,cliente:"BODEGA",mercancia:item.mercancia,cant:pendientes,unitario:item.unitario,otroCosto:0,precioPublico:0,costo:pendientes*item.unitario,total:0,fecha:item.fecha,vendedor:"",clientePago:"N/A",recibido:"N/A",pagadoProveedor:"",bodegaId:item.id,esBodega:true}];}else if(pendientes>0&&yaExisteProv){return sinEste.map(x=>x.id===item.pedidoProvId?{...x,cant:pendientes,costo:pendientes*item.unitario}:x);}return sinEste;});}} style={{background:"#fff1f2",border:"1px solid #fecdd3",borderRadius:6,padding:"3px 8px",cursor:"pointer",fontSize:11,color:"#e11d48"}}>✕</button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Mermas */}
+                        {(item.mermas||[]).length>0&&(
+                          <div style={{padding:"14px 24px",borderTop:"1px solid #f5f5f4"}}>
+                            <div style={{fontSize:11,fontWeight:600,color:"#a8a29e",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:10,fontFamily:"'Outfit',sans-serif"}}>Mermas</div>
+                            {(item.mermas||[]).map(m=>(
+                              <div key={m.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 0",borderTop:"1px solid #f5f5f4"}}>
+                                <div>
+                                  <span style={{fontSize:13,fontWeight:500,color:"#1c1917",fontFamily:"'Outfit',sans-serif"}}>{m.tipo||"Merma"}</span>
+                                  {m.nota&&<span style={{fontSize:12,color:"#a8a29e",marginLeft:8}}>{m.nota}</span>}
+                                </div>
+                                <div style={{display:"flex",alignItems:"center",gap:8}}>
+                                  <span style={{fontSize:13,fontWeight:700,color:"#d97706",fontFamily:"'Outfit',sans-serif"}}>{m.cant} uds</span>
+                                  <button onClick={e=>{e.stopPropagation();setModalMerma({bodegaId:item.id,id:m.id,cant:m.cant,tipo:m.tipo,nota:m.nota||""});}} style={{background:"#f5f5f4",border:"1px solid #e7e5e4",borderRadius:6,padding:"3px 8px",cursor:"pointer",fontSize:11,color:"#78716c"}}>✏️</button>
+                                  <button onClick={e=>{e.stopPropagation();setBodega(p=>p.map(b=>b.id===item.id?{...b,mermas:(b.mermas||[]).filter(x=>x.id!==m.id)}:b));}} style={{background:"#fff1f2",border:"1px solid #fecdd3",borderRadius:6,padding:"3px 8px",cursor:"pointer",fontSize:11,color:"#e11d48"}}>✕</button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Acciones */}
+                        <div style={{padding:"14px 24px",borderTop:"1px solid #f5f5f4",display:"flex",gap:10,flexWrap:"wrap"}}>
+                          <button onClick={e=>{e.stopPropagation();setBForm({fecha:item.fecha,proveedor:item.proveedor,mercancia:item.mercancia,cant:item.cant,unitario:item.unitario,notas:item.notas||"",_editId:item.id});setModalBodega("edit");}} style={{padding:"9px 18px",background:"#f5f5f4",border:"1px solid #e7e5e4",borderRadius:10,color:"#44403c",fontSize:13,cursor:"pointer",fontFamily:"'Outfit',sans-serif"}}>✏️ Editar</button>
+                          {dsp>0&&<button onClick={e=>{e.stopPropagation();setModalDist(item.id);setDForm({fecha:new Date().toISOString().slice(0,10),cliente:clientes[0]?.nombre||""});}} style={{padding:"9px 18px",background:"#1c1917",border:"none",borderRadius:10,color:"#fff",fontSize:13,cursor:"pointer",fontWeight:600,fontFamily:"'Outfit',sans-serif"}}>+ Distribuir ({dsp} disp.)</button>}
+                          <button onClick={e=>{e.stopPropagation();setModalMerma({bodegaId:item.id,id:null,cant:"",tipo:"",nota:""});}} style={{padding:"9px 18px",background:"#fff7ed",border:"1px solid #fed7aa",borderRadius:10,color:"#92400e",fontSize:13,cursor:"pointer",fontFamily:"'Outfit',sans-serif"}}>+ Merma</button>
+                          <button onClick={e=>{e.stopPropagation();if(!confirm("¿Eliminar?"))return;setBodega(p=>p.filter(b=>b.id!==item.id));setPedidos(p=>p.filter(x=>x.id!==item.pedidoProvId&&!(item.distribuciones||[]).find(d=>d.pedidoId===x.id)));}} style={{padding:"9px 18px",background:"#fff1f2",border:"1px solid #fecdd3",borderRadius:10,color:"#e11d48",fontSize:13,cursor:"pointer",fontFamily:"'Outfit',sans-serif"}}>🗑</button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
-          </div>
-        );
-      })}
-    </div>
-  )}
-</>)}
+          )}
+        </>)}
 
-{/* ══ MODAL: Bodega entrada ══ */}
-{modalBodega&&(
-  <Modal title={bForm._editId?"Editar entrada":"Nueva entrada de bodega"} onClose={()=>{setModalBodega(null);setBForm({});}}>
-    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 16px"}}>
-      <Field label="Fecha"><input type="date" value={bForm.fecha||""} onChange={e=>setBForm(f=>({...f,fecha:e.target.value}))} style={inp}/></Field>
-      <Field label="Proveedor"><Combo value={bForm.proveedor||""} onChange={v=>setBForm(f=>({...f,proveedor:v}))} options={proveedores.map(p=>p.nombre)} /></Field>
-    </div>
-    <Field label="Mercancía"><input value={bForm.mercancia||""} onChange={e=>setBForm(f=>({...f,mercancia:e.target.value.toUpperCase()}))} style={inp} placeholder="Ej: GORRAS NEW BALANCE"/></Field>
-    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 16px"}}>
-      <Field label="Cantidad"><input type="number" value={bForm.cant||""} onChange={e=>setBForm(f=>({...f,cant:e.target.value}))} style={inp}/></Field>
-      <Field label="Costo unitario"><input type="number" value={bForm.unitario||""} onChange={e=>setBForm(f=>({...f,unitario:e.target.value}))} style={inp}/></Field>
-    </div>
-    {bForm.cant&&bForm.unitario&&(<div style={{padding:"10px 14px",background:C.bg,borderRadius:9,marginBottom:14,fontSize:13,display:"flex",justifyContent:"space-between"}}><span style={{color:C.textDim}}>Costo total:</span><strong style={{color:C.yellow}}>{fmt((Number(bForm.cant)||0)*(Number(bForm.unitario)||0))}</strong></div>)}
-    <Field label="Notas (opcional)"><input value={bForm.notas||""} onChange={e=>setBForm(f=>({...f,notas:e.target.value}))} style={inp}/></Field>
-    <div style={{display:"flex",gap:10,marginTop:8}}>
-      <button onClick={()=>{setModalBodega(null);setBForm({});}} style={{flex:1,padding:"10px 0",background:"transparent",border:`1px solid ${C.border2}`,borderRadius:9,color:C.textDim,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>Cancelar</button>
-      <button onClick={()=>{
-        const cant=Number(bForm.cant)||0,unitario=Number(bForm.unitario)||0;
-        if(!bForm.mercancia||!cant||!bForm.proveedor)return;
-        const fecha=bForm.fecha||new Date().toISOString().slice(0,10);
-        if(bForm._editId){
-          const existing=bodega.find(b=>b.id===bForm._editId);
-          const pendientes=cant-(existing.distribuciones||[]).reduce((s,d)=>s+d.cant,0);
-          setBodega(p=>p.map(b=>b.id===bForm._editId?{...b,fecha,proveedor:bForm.proveedor,mercancia:bForm.mercancia,cant,unitario,costoTotal:cant*unitario,notas:bForm.notas||""}:b));
-          if(existing.pedidoProvId){
-            if(pendientes<=0){setPedidos(p=>p.filter(x=>x.id!==existing.pedidoProvId));}
-            else{setPedidos(p=>p.map(x=>x.id===existing.pedidoProvId?{...x,cant:pendientes,unitario,costo:pendientes*unitario,mercancia:bForm.mercancia,proveedor:bForm.proveedor,fecha}:x));}
-          }
-        } else {
-          const boId=`bo${Date.now()}`;
-          const pedId=nextFolio;
-          setPedidos(prev=>[...prev,{id:pedId,proveedor:bForm.proveedor,cliente:"BODEGA",mercancia:bForm.mercancia,cant,unitario,otroCosto:0,precioPublico:0,costo:cant*unitario,total:0,fecha,vendedor:"",clientePago:"N/A",recibido:"N/A",pagadoProveedor:"",bodegaId:boId,esBodega:true}]);
-          setNextFolio(pedId+1);
-          setBodega(p=>[{id:boId,fecha,proveedor:bForm.proveedor,mercancia:bForm.mercancia,cant,unitario,costoTotal:cant*unitario,distribuciones:[],mermas:[],notas:bForm.notas||"",pedidoProvId:pedId},...p]);
-        }
-        setModalBodega(null);setBForm({});
-      }} style={{...btnP,flex:2,padding:"10px 0",fontSize:14}}>{bForm._editId?"Guardar cambios":"Registrar entrada"}</button>
-    </div>
-  </Modal>
-)}
+        {modalEstadoProv&&<EstadoCuentaProveedorModal nombre={modalEstadoProv} pedidos={pedidos} abonosProv={abonosProv} onClose={()=>setModalEstadoProv(null)} fmt={fmt} C={C} inp={inp} btnP={btnP}/>}
 
-{/* ══ MODAL: Distribuir ══ */}
-{modalDist&&(()=>{
-  const item=bodega.find(b=>b.id===modalDist);
-  if(!item)return null;
-  const dsp=disponibleDe(item);
-  return(
-    <Modal title={`Distribuir: ${item.mercancia}`} onClose={()=>{setModalDist(null);setDForm({});}}>
-      <div style={{padding:"10px 14px",background:C.bg,borderRadius:9,marginBottom:16,display:"flex",gap:16,fontSize:13}}>
-        <span style={{color:C.textDim}}>Disponible: <strong style={{color:dsp>0?C.green:C.red}}>{dsp} uds</strong></span>
-        <span style={{color:C.textDim}}>Costo unit: <strong style={{color:C.yellow}}>{fmt(item.unitario)}</strong></span>
-      </div>
-      <div style={{marginBottom:16,padding:14,border:`1px solid ${C.border}`,borderRadius:10}}>
-        <div style={{fontWeight:700,color:C.accent3,fontSize:13,marginBottom:10}}>📦 Distribuir a cliente</div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 16px"}}>
-          <Field label="Fecha"><input type="date" value={dForm.fecha||""} onChange={e=>setDForm(f=>({...f,fecha:e.target.value}))} style={inp}/></Field>
-          <Field label="Cliente"><Combo value={dForm.cliente||""} onChange={v=>setDForm(f=>({...f,cliente:v}))} options={clientes.map(c=>c.nombre)} /></Field>
-        </div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 16px"}}>
-          <Field label="Cantidad"><input type="number" value={dForm.cant||""} onChange={e=>setDForm(f=>({...f,cant:e.target.value}))} style={inp} placeholder={`Máx ${dsp}`}/></Field>
-          <Field label="Precio venta unit."><input type="number" value={dForm.precio||""} onChange={e=>setDForm(f=>({...f,precio:e.target.value}))} style={inp}/></Field>
-        </div>
-        {dForm.cant&&dForm.precio&&(<div style={{padding:"8px 12px",background:"#f0fdf4",borderRadius:8,fontSize:12,marginBottom:8,display:"flex",justifyContent:"space-between"}}><span>Total: <strong style={{color:C.green}}>{fmt((Number(dForm.cant)||0)*(Number(dForm.precio)||0))}</strong></span><span>Ganancia: <strong style={{color:gColor((Number(dForm.cant)||0)*(Number(dForm.precio)-item.unitario))}}>{fmt((Number(dForm.cant)||0)*(Number(dForm.precio)-item.unitario))}</strong></span></div>)}
-        <Field label="Nota"><input value={dForm.nota||""} onChange={e=>setDForm(f=>({...f,nota:e.target.value}))} style={inp}/></Field>
-        <button onClick={()=>{
-          const cant=Number(dForm.cant)||0,precio=Number(dForm.precio)||0;
-          if(!dForm.cliente||!cant)return;
-          if(cant>dsp){alert(`Solo quedan ${dsp} unidades`);return;}
-          const pedId=nextFolio;
-          setPedidos(prev=>[...prev,{id:pedId,proveedor:item.proveedor,cliente:dForm.cliente,mercancia:item.mercancia,cant,unitario:item.unitario,otroCosto:0,precioPublico:precio,costo:cant*item.unitario,total:cant*precio,fecha:dForm.fecha||new Date().toISOString().slice(0,10),vendedor:"",clientePago:"",recibido:"",pagadoProveedor:"",bodegaId:item.id}]);
-          setNextFolio(pedId+1);
-          const distribuidasAntes=(item.distribuciones||[]).reduce((s,d)=>s+d.cant,0);
-          const pendientes=item.cant-distribuidasAntes-cant;
-          if(item.pedidoProvId){
-            if(pendientes<=0){setPedidos(p=>p.filter(x=>x.id!==item.pedidoProvId));}
-            else{setPedidos(p=>p.map(x=>x.id===item.pedidoProvId?{...x,cant:pendientes,costo:pendientes*item.unitario,total:0}:x));}
-          }
-          setBodega(p=>p.map(b=>b.id===modalDist?{...b,distribuciones:[...(b.distribuciones||[]),{id:`dist${Date.now()}`,pedidoId:pedId,cliente:dForm.cliente,cant,precio,total:cant*precio,fecha:dForm.fecha||new Date().toISOString().slice(0,10),nota:dForm.nota||""}]}:b));
-          setModalDist(null);setDForm({});
-        }} style={{...btnP,width:"100%",padding:"9px 0",fontSize:13,marginTop:4}}>Asignar a {dForm.cliente||"cliente"}</button>
-      </div>
-      <div style={{padding:14,border:`1px solid #fde68a`,borderRadius:10,background:"#fffbeb"}}>
-        <div style={{fontWeight:700,color:C.yellow,fontSize:13,marginBottom:10}}>⚠️ Registrar merma</div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 16px"}}>
-          <Field label="Cantidad"><input type="number" value={dForm.cantMerma||""} onChange={e=>setDForm(f=>({...f,cantMerma:e.target.value}))} style={inp}/></Field>
-          <Field label="Tipo"><select value={dForm.tipoMerma||""} onChange={e=>setDForm(f=>({...f,tipoMerma:e.target.value}))} style={inp}><option value="">Seleccionar...</option><option>Defecto / Dañado</option><option>Pérdida</option><option>Robo</option><option>Muestra gratis</option><option>Otro</option></select></Field>
-        </div>
-        <Field label="Nota"><input value={dForm.notaMerma||""} onChange={e=>setDForm(f=>({...f,notaMerma:e.target.value}))} style={inp}/></Field>
-        <button onClick={()=>{
-          const cant=Number(dForm.cantMerma)||0;
-          if(!cant||!dForm.tipoMerma)return;
-          if(cant>dsp){alert(`Solo quedan ${dsp} unidades`);return;}
-          setBodega(p=>p.map(b=>b.id===modalDist?{...b,mermas:[...(b.mermas||[]),{id:`mrm${Date.now()}`,cant,tipo:dForm.tipoMerma,nota:dForm.notaMerma||"",fecha:new Date().toISOString().slice(0,10)}]}:b));
-          setDForm(f=>({...f,cantMerma:"",tipoMerma:"",notaMerma:""}));
-        }} style={{width:"100%",padding:"8px 0",background:C.yellow,border:"none",borderRadius:9,color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",marginTop:4}}>Registrar merma</button>
-      </div>
-      <button onClick={()=>{setModalDist(null);setDForm({});}} style={{width:"100%",marginTop:12,padding:"9px 0",background:"transparent",border:`1px solid ${C.border2}`,borderRadius:9,color:C.textDim,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>Cerrar</button>
-    </Modal>
-  );
-})()}
-
-{modalDistribuir&&<DistribuirPagosModal nombre={modalDistribuir} pedidos={pedidos} abonosCli={abonosCli} setPedidos={setPedidos} onClose={()=>setModalDistribuir(null)} fmt={fmt} C={C} inp={inp} btnP={btnP}/>}
+      {modalDistribuir&&<DistribuirPagosModal nombre={modalDistribuir} pedidos={pedidos} abonosCli={abonosCli} setPedidos={setPedidos} onClose={()=>setModalDistribuir(null)} fmt={fmt} C={C} inp={inp} btnP={btnP}/>}
 
 {modalEstadoCli&&<EstadoCuentaModal nombre={modalEstadoCli} pedidos={pedidos} abonosCli={abonosCli} flujo={flujo} onClose={()=>setModalEstadoCli(null)} fmt={fmt} C={C} inp={inp} btnP={btnP} periodo={periodo} periodoAnio={periodoAnio} periodoMes={periodoMes} periodoSem={periodoSem} setPedidos={setPedidos}/>}
 
 {editMerma&&(
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center"}} onClick={e=>{if(e.target===e.currentTarget)setEditMerma(null);}}>
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.25)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center"}} onClick={e=>{if(e.target===e.currentTarget)setEditMerma(null);}}>
           <div style={{background:"#fff",borderRadius:14,padding:24,width:"100%",maxWidth:340,boxShadow:"0 8px 32px rgba(0,0,0,0.18)"}}>
             <div style={{fontFamily:"'Sora',sans-serif",fontSize:16,fontWeight:700,color:C.text,marginBottom:16}}>✏️ Editar merma</div>
             <div style={{marginBottom:10}}>
@@ -1712,8 +1866,450 @@ export default function App(){
       })()}
 
 
+    
+
+      {isPedOpen&&(
+        <Modal title={modalPed==="new"?"Nuevo pedido":"Editar pedido"} onClose={()=>setModalPed(null)}>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 16px"}}>
+            <Field label="Proveedor"><Combo value={form.proveedor||""} onChange={v=>sf("proveedor",v)} options={proveedores.map(p=>p.nombre)} /></Field>
+            <Field label="Cliente"><Combo value={form.cliente||""} onChange={v=>sf("cliente",v)} options={clientes.map(c=>c.nombre)} /></Field>
+          </div>
+          <Field label="Vendedor"><Combo value={form.vendedor||""} onChange={v=>sf("vendedor",v)} options={["— Sin asignar —",...vendedores]} /></Field>
+          <Field label="Mercancía">
+            <input value={form.mercancia||""} onChange={e=>sf("mercancia",e.target.value)} style={inp}/>
+          </Field>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:"0 16px"}}>
+            <Field label="Cantidad"><input type="number" value={form.cant||""} onChange={e=>sf("cant",e.target.value)} style={inp}/></Field>
+            <Field label="Costo unit."><input type="number" value={form.unitario||""} onChange={e=>sf("unitario",e.target.value)} style={inp}/></Field>
+            <Field label="Otro costo"><input type="number" value={form.otroCosto||""} onChange={e=>sf("otroCosto",e.target.value)} style={inp}/></Field>
+          </div>
+          <Field label="Precio de venta al cliente">
+            <input type="number" value={form.precioPublico||""} onChange={e=>sf("precioPublico",e.target.value)} style={inp}/>
+          </Field>
+          <div style={{background:C.bg,borderRadius:9,padding:"12px 14px",marginBottom:14,display:"flex",justifyContent:"space-between",fontSize:13}}>
+            <span style={{color:C.textDim}}>Costo: <strong style={{color:C.yellow}}>{fmt((Number(form.cant)||0)*(Number(form.unitario)||0)+(Number(form.otroCosto)||0))}</strong></span>
+            <span style={{color:C.textDim}}>Venta: <strong style={{color:C.blue}}>{fmt((Number(form.cant)||0)*(Number(form.precioPublico)||0))}</strong></span>
+            <span style={{color:C.textDim}}>Ganancia: <strong style={{color:C.green}}>{fmt((Number(form.cant)||0)*(Number(form.precioPublico)||0)-(Number(form.cant)||0)*(Number(form.unitario)||0)-(Number(form.otroCosto)||0))}</strong></span>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:"0 16px"}}>
+            {[["¿Cliente pagó?","clientePago"],["¿Yo recibí?","recibido"],["¿Pagué proveedor?","pagadoProveedor"]].map(([label,key])=>(
+              <Field key={key} label={label}>
+                <select value={form[key]||""} onChange={e=>sf(key,e.target.value)} style={inp}>
+                  {STATUS_OPTS.map(s=><option key={s} value={s}>{s||"—"}</option>)}
+                </select>
+              </Field>
+            ))}
+          </div>
+          <div style={{display:"flex",gap:10,marginTop:6}}>
+            <button onClick={()=>setModalPed(null)} style={{flex:1,padding:"10px 0",background:"transparent",border:`1px solid ${C.border2}`,borderRadius:9,color:C.textDim,fontFamily:"'DM Sans',sans-serif",cursor:"pointer"}}>Cancelar</button>
+            <button onClick={savePed} style={{...btnP,flex:2,padding:"10px 0",fontSize:14}}>Guardar pedido</button>
+          </div>
+        </Modal>
+      )}
+
+
+
+      {modalBodega&&(
+  <Modal title={bForm._editId?"Editar entrada":"Nueva entrada de bodega"} onClose={()=>{setModalBodega(null);setBForm({});}}>
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 16px"}}>
+      <Field label="Fecha"><input type="date" value={bForm.fecha||""} onChange={e=>setBForm(f=>({...f,fecha:e.target.value}))} style={inp}/></Field>
+      <Field label="Proveedor"><Combo value={bForm.proveedor||""} onChange={v=>setBForm(f=>({...f,proveedor:v}))} options={proveedores.map(p=>p.nombre)} /></Field>
+    </div>
+    <Field label="Mercancía"><input value={bForm.mercancia||""} onChange={e=>setBForm(f=>({...f,mercancia:e.target.value.toUpperCase()}))} style={inp} placeholder="Ej: GORRAS NEW BALANCE"/></Field>
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 16px"}}>
+      <Field label="Cantidad"><input type="number" value={bForm.cant||""} onChange={e=>setBForm(f=>({...f,cant:e.target.value}))} style={inp}/></Field>
+      <Field label="Costo unitario"><input type="number" value={bForm.unitario||""} onChange={e=>setBForm(f=>({...f,unitario:e.target.value}))} style={inp}/></Field>
+    </div>
+    {bForm.cant&&bForm.unitario&&(<div style={{padding:"10px 14px",background:C.bg,borderRadius:9,marginBottom:14,fontSize:13,display:"flex",justifyContent:"space-between"}}><span style={{color:C.textDim}}>Costo total:</span><strong style={{color:C.yellow}}>{fmt((Number(bForm.cant)||0)*(Number(bForm.unitario)||0))}</strong></div>)}
+    <Field label="Notas (opcional)"><input value={bForm.notas||""} onChange={e=>setBForm(f=>({...f,notas:e.target.value}))} style={inp}/></Field>
+    <div style={{display:"flex",gap:10,marginTop:8}}>
+      <button onClick={()=>{setModalBodega(null);setBForm({});}} style={{flex:1,padding:"10px 0",background:"transparent",border:`1px solid ${C.border2}`,borderRadius:9,color:C.textDim,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>Cancelar</button>
+      <button onClick={()=>{
+        const cant=Number(bForm.cant)||0,unitario=Number(bForm.unitario)||0;
+        if(!bForm.mercancia||!cant||!bForm.proveedor)return;
+        const fecha=bForm.fecha||new Date().toISOString().slice(0,10);
+        if(bForm._editId){
+          const existing=bodega.find(b=>b.id===bForm._editId);
+          const pendientes=cant-(existing.distribuciones||[]).reduce((s,d)=>s+d.cant,0);
+          setBodega(p=>p.map(b=>b.id===bForm._editId?{...b,fecha,proveedor:bForm.proveedor,mercancia:bForm.mercancia,cant,unitario,costoTotal:cant*unitario,notas:bForm.notas||""}:b));
+          if(existing.pedidoProvId){
+            if(pendientes<=0){setPedidos(p=>p.filter(x=>x.id!==existing.pedidoProvId));}
+            else{setPedidos(p=>p.map(x=>x.id===existing.pedidoProvId?{...x,cant:pendientes,unitario,costo:pendientes*unitario,mercancia:bForm.mercancia,proveedor:bForm.proveedor,fecha}:x));}
+          }
+        } else {
+          const boId=`bo${Date.now()}`;
+          const pedId=nextFolio;
+          setPedidos(prev=>[...prev,{id:pedId,proveedor:bForm.proveedor,cliente:"BODEGA",mercancia:bForm.mercancia,cant,unitario,otroCosto:0,precioPublico:0,costo:cant*unitario,total:0,fecha,vendedor:"",clientePago:"N/A",recibido:"N/A",pagadoProveedor:"",bodegaId:boId,esBodega:true}]);
+          setNextFolio(pedId+1);
+          setBodega(p=>[{id:boId,fecha,proveedor:bForm.proveedor,mercancia:bForm.mercancia,cant,unitario,costoTotal:cant*unitario,distribuciones:[],mermas:[],notas:bForm.notas||"",pedidoProvId:pedId},...p]);
+        }
+        setModalBodega(null);setBForm({});
+      }} style={{...btnP,flex:2,padding:"10px 0",fontSize:14}}>{bForm._editId?"Guardar cambios":"Registrar entrada"}</button>
+    </div>
+  </Modal>
+)}
+
+{/* ══ MODAL: Distribuir ══ */}
+
+
+      {modalDist&&(()=>{
+  const item=bodega.find(b=>b.id===modalDist);
+  if(!item)return null;
+  const dsp=disponibleDe(item);
+  return(
+    <Modal title={`Distribuir: ${item.mercancia}`} onClose={()=>{setModalDist(null);setDForm({});}}>
+      <div style={{padding:"10px 14px",background:C.bg,borderRadius:9,marginBottom:16,display:"flex",gap:16,fontSize:13}}>
+        <span style={{color:C.textDim}}>Disponible: <strong style={{color:dsp>0?C.green:C.red}}>{dsp} uds</strong></span>
+        <span style={{color:C.textDim}}>Costo unit: <strong style={{color:C.yellow}}>{fmt(item.unitario)}</strong></span>
+      </div>
+      <div style={{marginBottom:16,padding:14,border:`1px solid ${C.border}`,borderRadius:10}}>
+        <div style={{fontWeight:700,color:C.accent3,fontSize:13,marginBottom:10}}>📦 Distribuir a cliente</div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 16px"}}>
+          <Field label="Fecha"><input type="date" value={dForm.fecha||""} onChange={e=>setDForm(f=>({...f,fecha:e.target.value}))} style={inp}/></Field>
+          <Field label="Cliente"><Combo value={dForm.cliente||""} onChange={v=>setDForm(f=>({...f,cliente:v}))} options={clientes.map(c=>c.nombre)} /></Field>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 16px"}}>
+          <Field label="Cantidad"><input type="number" value={dForm.cant||""} onChange={e=>setDForm(f=>({...f,cant:e.target.value}))} style={inp} placeholder={`Máx ${dsp}`}/></Field>
+          <Field label="Precio venta unit."><input type="number" value={dForm.precio||""} onChange={e=>setDForm(f=>({...f,precio:e.target.value}))} style={inp}/></Field>
+        </div>
+        {dForm.cant&&dForm.precio&&(<div style={{padding:"8px 12px",background:"#f0fdf4",borderRadius:8,fontSize:12,marginBottom:8,display:"flex",justifyContent:"space-between"}}><span>Total: <strong style={{color:C.green}}>{fmt((Number(dForm.cant)||0)*(Number(dForm.precio)||0))}</strong></span><span>Ganancia: <strong style={{color:gColor((Number(dForm.cant)||0)*(Number(dForm.precio)-item.unitario))}}>{fmt((Number(dForm.cant)||0)*(Number(dForm.precio)-item.unitario))}</strong></span></div>)}
+        <Field label="Nota"><input value={dForm.nota||""} onChange={e=>setDForm(f=>({...f,nota:e.target.value}))} style={inp}/></Field>
+        <button onClick={()=>{
+          const cant=Number(dForm.cant)||0,precio=Number(dForm.precio)||0;
+          if(!dForm.cliente||!cant)return;
+          if(cant>dsp){alert(`Solo quedan ${dsp} unidades`);return;}
+          const pedId=nextFolio;
+          setPedidos(prev=>[...prev,{id:pedId,proveedor:item.proveedor,cliente:dForm.cliente,mercancia:item.mercancia,cant,unitario:item.unitario,otroCosto:0,precioPublico:precio,costo:cant*item.unitario,total:cant*precio,fecha:dForm.fecha||new Date().toISOString().slice(0,10),vendedor:"",clientePago:"",recibido:"",pagadoProveedor:"",bodegaId:item.id}]);
+          setNextFolio(pedId+1);
+          const distribuidasAntes=(item.distribuciones||[]).reduce((s,d)=>s+d.cant,0);
+          const pendientes=item.cant-distribuidasAntes-cant;
+          if(item.pedidoProvId){
+            if(pendientes<=0){setPedidos(p=>p.filter(x=>x.id!==item.pedidoProvId));}
+            else{setPedidos(p=>p.map(x=>x.id===item.pedidoProvId?{...x,cant:pendientes,costo:pendientes*item.unitario,total:0}:x));}
+          }
+          setBodega(p=>p.map(b=>b.id===modalDist?{...b,distribuciones:[...(b.distribuciones||[]),{id:`dist${Date.now()}`,pedidoId:pedId,cliente:dForm.cliente,cant,precio,total:cant*precio,fecha:dForm.fecha||new Date().toISOString().slice(0,10),nota:dForm.nota||""}]}:b));
+          setModalDist(null);setDForm({});
+        }} style={{...btnP,width:"100%",padding:"9px 0",fontSize:13,marginTop:4}}>Asignar a {dForm.cliente||"cliente"}</button>
+      </div>
+      <div style={{padding:14,border:`1px solid #fde68a`,borderRadius:10,background:"#fffbeb"}}>
+        <div style={{fontWeight:700,color:C.yellow,fontSize:13,marginBottom:10}}>⚠️ Registrar merma</div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 16px"}}>
+          <Field label="Cantidad"><input type="number" value={dForm.cantMerma||""} onChange={e=>setDForm(f=>({...f,cantMerma:e.target.value}))} style={inp}/></Field>
+          <Field label="Tipo"><select value={dForm.tipoMerma||""} onChange={e=>setDForm(f=>({...f,tipoMerma:e.target.value}))} style={inp}><option value="">Seleccionar...</option><option>Defecto / Dañado</option><option>Pérdida</option><option>Robo</option><option>Muestra gratis</option><option>Otro</option></select></Field>
+        </div>
+        <Field label="Nota"><input value={dForm.notaMerma||""} onChange={e=>setDForm(f=>({...f,notaMerma:e.target.value}))} style={inp}/></Field>
+        <button onClick={()=>{
+          const cant=Number(dForm.cantMerma)||0;
+          if(!cant||!dForm.tipoMerma)return;
+          if(cant>dsp){alert(`Solo quedan ${dsp} unidades`);return;}
+          setBodega(p=>p.map(b=>b.id===modalDist?{...b,mermas:[...(b.mermas||[]),{id:`mrm${Date.now()}`,cant,tipo:dForm.tipoMerma,nota:dForm.notaMerma||"",fecha:new Date().toISOString().slice(0,10)}]}:b));
+          setDForm(f=>({...f,cantMerma:"",tipoMerma:"",notaMerma:""}));
+        }} style={{width:"100%",padding:"8px 0",background:C.yellow,border:"none",borderRadius:9,color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",marginTop:4}}>Registrar merma</button>
+      </div>
+      <button onClick={()=>{setModalDist(null);setDForm({});}} style={{width:"100%",marginTop:12,padding:"9px 0",background:"transparent",border:`1px solid ${C.border2}`,borderRadius:9,color:C.textDim,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>Cerrar</button>
+    </Modal>
+  );
+})()}
+
+{modalEstadoProv&&<EstadoCuentaProveedorModal nombre={modalEstadoProv} pedidos={pedidos} abonosProv={abonosProv} onClose={()=>setModalEstadoProv(null)} fmt={fmt} C={C} inp={inp} btnP={btnP}/>}
+
+      {modalDistribuir&&<DistribuirPagosModal nombre={modalDistribuir} pedidos={pedidos} abonosCli={abonosCli} setPedidos={setPedidos} onClose={()=>setModalDistribuir(null)} fmt={fmt} C={C} inp={inp} btnP={btnP}/>}
+
+{modalEstadoCli&&<EstadoCuentaModal nombre={modalEstadoCli} pedidos={pedidos} abonosCli={abonosCli} flujo={flujo} onClose={()=>setModalEstadoCli(null)} fmt={fmt} C={C} inp={inp} btnP={btnP} periodo={periodo} periodoAnio={periodoAnio} periodoMes={periodoMes} periodoSem={periodoSem} setPedidos={setPedidos}/>}
+
+{editMerma&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.25)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center"}} onClick={e=>{if(e.target===e.currentTarget)setEditMerma(null);}}>
+          <div style={{background:"#fff",borderRadius:14,padding:24,width:"100%",maxWidth:340,boxShadow:"0 8px 32px rgba(0,0,0,0.18)"}}>
+            <div style={{fontFamily:"'Sora',sans-serif",fontSize:16,fontWeight:700,color:C.text,marginBottom:16}}>✏️ Editar merma</div>
+            <div style={{marginBottom:10}}>
+              <div style={{fontSize:12,color:C.textDim,marginBottom:4}}>Cantidad</div>
+              <input type="number" value={editMerma.cant} onChange={e=>setEditMerma(p=>({...p,cant:Number(e.target.value)}))} style={{...inp,width:"100%"}}/>
+            </div>
+            <div style={{marginBottom:10}}>
+              <div style={{fontSize:12,color:C.textDim,marginBottom:4}}>Tipo</div>
+              <select value={editMerma.tipo} onChange={e=>setEditMerma(p=>({...p,tipo:e.target.value}))} style={{...inp,width:"100%"}}>
+                <option value="Daño">Daño</option>
+                <option value="Robo">Robo</option>
+                <option value="Vencimiento">Vencimiento</option>
+                <option value="Otro">Otro</option>
+              </select>
+            </div>
+            <div style={{marginBottom:16}}>
+              <div style={{fontSize:12,color:C.textDim,marginBottom:4}}>Nota</div>
+              <input value={editMerma.nota} onChange={e=>setEditMerma(p=>({...p,nota:e.target.value}))} style={{...inp,width:"100%"}} placeholder="Opcional"/>
+            </div>
+            <div style={{display:"flex",gap:8}}>
+              <button onClick={()=>setEditMerma(null)} style={{flex:1,padding:"9px 0",background:C.bg,border:`1px solid ${C.border}`,borderRadius:8,cursor:"pointer",fontSize:13}}>Cancelar</button>
+              <button onClick={()=>{
+                if(!editMerma.cant||!editMerma.tipo)return;
+                setBodega(p=>p.map(b=>b.id===editMerma.bodegaId?{...b,mermas:(b.mermas||[]).map(m=>m.id===editMerma.mermaId?{...m,cant:editMerma.cant,tipo:editMerma.tipo,nota:editMerma.nota}:m)}:b));
+                setEditMerma(null);
+              }} style={{flex:2,padding:"9px 0",background:C.accent,border:"none",borderRadius:8,cursor:"pointer",fontSize:13,fontWeight:700,color:"#fff"}}>Guardar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+{/* ══ MINI-MODALS: agregar proveedor / cliente / vendedor ══
+          Usan zIndex:400 para aparecer ENCIMA del modal de pedido */}
+      {modalProv&&(
+        <AddNombreModal
+          title={editProv?"Editar proveedor":"Nuevo proveedor"}
+          placeholder="Ej: NIKE WHOLESALE"
+          onSave={saveProv}
+          onClose={()=>{setModalProv(false);setEditProv(null);setNewNom("");}}
+        />
+      )}
+      {modalCli&&(
+        <AddNombreModal
+          title={editCli?"Editar cliente":"Nuevo cliente"}
+          placeholder="Ej: PEDRO RAMIREZ"
+          onSave={saveCli}
+          onClose={()=>{setModalCli(false);setEditCli(null);setNewNom("");}}
+        />
+      )}
+      {modalVend&&(
+        <AddNombreModal
+          title="Nuevo vendedor"
+          placeholder="Ej: CARLOS"
+          onSave={saveVend}
+          onClose={()=>setModalVend(false)}
+        />
+      )}
+
+      {/* ══ MODAL: Abono Proveedor ══ */}
+      {editMerma&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.25)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center"}} onClick={e=>{if(e.target===e.currentTarget)setEditMerma(null);}}>
+          <div style={{background:"#fff",borderRadius:14,padding:24,width:"100%",maxWidth:360,boxShadow:"0 8px 32px rgba(0,0,0,0.18)"}}>
+            <div style={{fontFamily:"'Outfit',sans-serif",fontSize:16,fontWeight:700,color:"#1c1917",marginBottom:16}}>{editMerma.mermaId?"✏️ Editar merma":"+ Nueva merma"}</div>
+            <div style={{marginBottom:12}}>
+              <div style={{fontSize:12,color:"#a8a29e",marginBottom:4}}>Cantidad</div>
+              <input type="number" value={editMerma.cant||""} onChange={e=>setEditMerma(p=>({...p,cant:Number(e.target.value)}))} style={{...inp}}/>
+            </div>
+            <div style={{marginBottom:12}}>
+              <div style={{fontSize:12,color:"#a8a29e",marginBottom:4}}>Tipo</div>
+              <select value={editMerma.tipo||""} onChange={e=>setEditMerma(p=>({...p,tipo:e.target.value}))} style={{...inp}}>
+                <option value="">— Seleccionar —</option>
+                <option value="Daño">Daño</option>
+                <option value="Robo">Robo</option>
+                <option value="Vencimiento">Vencimiento</option>
+                <option value="Otro">Otro</option>
+              </select>
+            </div>
+            <div style={{marginBottom:16}}>
+              <div style={{fontSize:12,color:"#a8a29e",marginBottom:4}}>Nota</div>
+              <input value={editMerma.nota||""} onChange={e=>setEditMerma(p=>({...p,nota:e.target.value}))} style={{...inp}} placeholder="Opcional"/>
+            </div>
+            <div style={{display:"flex",gap:8}}>
+              <button onClick={()=>setEditMerma(null)} style={{flex:1,padding:"10px 0",background:"transparent",border:"1px solid #e7e5e4",borderRadius:9,color:"#78716c",cursor:"pointer",fontFamily:"'Outfit',sans-serif"}}>Cancelar</button>
+              <button onClick={()=>{
+                const {bodegaId,mermaId,cant,tipo,nota}=editMerma;
+                if(!cant||!tipo)return;
+                if(mermaId){
+                  setBodega(p=>p.map(b=>b.id===bodegaId?{...b,mermas:(b.mermas||[]).map(m=>m.id===mermaId?{...m,cant,tipo,nota}:m)}:b));
+                } else {
+                  const mid="m"+Date.now();
+                  setBodega(p=>p.map(b=>b.id===bodegaId?{...b,mermas:[...(b.mermas||[]),{id:mid,cant,tipo,nota}]}:b));
+                }
+                setEditMerma(null);
+              }} style={{flex:2,padding:"10px 0",background:"#1c1917",border:"none",borderRadius:9,color:"#fff",cursor:"pointer",fontWeight:600,fontFamily:"'Outfit',sans-serif"}}>Guardar</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {modalEstadoProv&&<EstadoCuentaProveedorModal nombre={modalEstadoProv} pedidos={pedidos} abonosProv={abonosProv} onClose={()=>setModalEstadoProv(null)} fmt={fmt} C={C} inp={inp} btnP={btnP}/>}
+
+      {modalDistribuir&&<DistribuirPagosModal nombre={modalDistribuir} pedidos={pedidos} abonosCli={abonosCli} setPedidos={setPedidos} onClose={()=>setModalDistribuir(null)} fmt={fmt} C={C} inp={inp} btnP={btnP}/>}
+      {modalEstadoCli&&<EstadoCuentaModal nombre={modalEstadoCli} pedidos={pedidos} abonosCli={abonosCli} flujo={flujo} onClose={()=>setModalEstadoCli(null)} fmt={fmt} C={C} inp={inp} btnP={btnP} periodo={periodo} periodoAnio={periodoAnio} periodoMes={periodoMes} periodoSem={periodoSem} setPedidos={setPedidos}/>}
+      {modalAP&&(
+        <Modal title={`Abono a ${modalAP}`} onClose={()=>setModalAP(null)}>
+          <Field label="Fecha"><input type="date" value={aForm.fecha||""} onChange={e=>setAForm(f=>({...f,fecha:e.target.value}))} style={inp}/></Field>
+          <Field label="Monto"><input type="number" value={aForm.monto||""} onChange={e=>setAForm(f=>({...f,monto:e.target.value}))} style={inp}/></Field>
+          <Field label="Nota"><input value={aForm.nota||""} onChange={e=>setAForm(f=>({...f,nota:e.target.value}))} style={inp}/></Field>
+          <div style={{display:"flex",gap:10,marginTop:8}}>
+            <button onClick={()=>setModalAP(null)} style={{flex:1,padding:"10px 0",background:"transparent",border:`1px solid ${C.border2}`,borderRadius:9,color:C.textDim,cursor:"pointer"}}>Cancelar</button>
+            <button onClick={saveAP} style={{...btnP,flex:2,padding:"10px 0",fontSize:14}}>Registrar abono</button>
+          </div>
+        </Modal>
+      )}
+
+      {/* ══ MODAL: Pago Cliente ══ */}
+      {modalAC&&(
+        <Modal title={`Registrar pago de ${modalAC}`} onClose={()=>{setModalAC(null);setAForm({});}}>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 16px"}}>
+            <Field label="Fecha"><input type="date" value={aForm.fecha||""} onChange={e=>setAForm(f=>({...f,fecha:e.target.value}))} style={inp}/></Field>
+            <Field label="Monto recibido">
+              <input type="number" value={aForm.monto||""} onChange={e=>setAForm(f=>({...f,monto:e.target.value}))} style={inp} placeholder="0.00"/>
+            </Field>
+          </div>
+          <Field label="Nota"><input value={aForm.nota||""} onChange={e=>setAForm(f=>({...f,nota:e.target.value}))} style={inp} placeholder="Ej: transferencia, efectivo..."/></Field>
+          <div style={{padding:"10px 12px",background:"#eff6ff",borderRadius:8,fontSize:12,color:"#1d4ed8",marginBottom:4}}>
+            💡 El monto quedará como saldo a favor del cliente. Después puedes distribuirlo entre sus pedidos pendientes.
+          </div>
+          <div style={{display:"flex",gap:10,marginTop:8}}>
+            <button onClick={()=>{setModalAC(null);setAForm({});}} style={{flex:1,padding:"10px 0",background:"transparent",border:`1px solid ${C.border2}`,borderRadius:9,color:C.textDim,cursor:"pointer"}}>Cancelar</button>
+            <button onClick={saveAC} style={{...btnP,flex:2,padding:"10px 0",fontSize:14}}>Registrar pago</button>
+          </div>
+        </Modal>
+      )}
+
+      {/* ══ TAB 4: FLUJO DE EFECTIVO ══ */}
+      {tab===4&&(()=>{
+        const saveFlujoEntry=()=>{
+          const monto=Number(flujoForm.monto)||0;
+          if(!monto||!flujoForm.descripcion) return;
+          const esIngreso=flujoForm.tipo==="INGRESO";
+          const montoFinal=esIngreso?monto:-monto;
+          if(flujoForm._editId){
+            setFlujo(p=>p.map(f=>f.id===flujoForm._editId?{...f,fecha:flujoForm.fecha||f.fecha,tipo:flujoForm.tipo,categoria:flujoForm.categoria||"Otro",descripcion:flujoForm.descripcion,monto:montoFinal}:f));
+            if(flujoForm.abonoId){
+              setAbonosCli(p=>p.map(a=>a.id===flujoForm.abonoId?{...a,monto:Math.abs(montoFinal),fecha:flujoForm.fecha||a.fecha,nota:flujoForm.descripcion.replace(/^Pago de [^—]+— ?/,"")}:a));
+            }
+          } else {
+            setFlujo(p=>[...p,{id:`fl${Date.now()}`,fecha:flujoForm.fecha||new Date().toISOString().slice(0,10),tipo:flujoForm.tipo,categoria:flujoForm.categoria||"Otro",descripcion:flujoForm.descripcion,monto:montoFinal}]);
+          }
+          setModalFlujo(false);setFlujoForm({});
+        };
+        const TIPOS_CAT={
+          INGRESO:["Cobro cliente","Inyección de capital","Otro ingreso"],
+          EGRESO:["Pago proveedor","Gasto operativo","Retiro","Otro egreso"]
+        };
+        const cutoff=periodo==="anio"?periodoAnio:periodo==="mes"?periodoAnio+"-"+periodoMes:periodoSem;
+        const saldoAnterior=periodo==="todo"?0:flujo.filter(m=>m.fecha&&m.fecha<cutoff&&!enPeriodo(m.fecha)).reduce((s,m)=>s+m.monto,0);
+        const flujoFiltrado=[...flujo].filter(m=>enPeriodo(m.fecha));
+        const sorted=[...flujoFiltrado].sort((a,b)=>a.fecha.localeCompare(b.fecha));
+        let runSaldo=saldoAnterior;
+        const rows=sorted.map(m=>{runSaldo+=m.monto;return{...m,saldoAcum:runSaldo};});
+        const totalIngresos=flujoFiltrado.filter(m=>m.monto>0).reduce((s,m)=>s+m.monto,0);
+        const totalEgresos=flujoFiltrado.filter(m=>m.monto<0).reduce((s,m)=>s+Math.abs(m.monto),0);
+        const saldoActual=saldoAnterior+totalIngresos-totalEgresos;
+        return(
+          <>
+            {/* KPIs */}
+            <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:14,marginBottom:20}}>
+              {[
+                {l:"Total ingresos",v:fmt(totalIngresos),c:C.green,icon:"📈"},
+                {l:"Total egresos",v:fmt(totalEgresos),c:C.red,icon:"📉"},
+                {l:"Saldo actual",v:fmt(saldoActual),c:saldoActual>=0?C.green:C.red,icon:"💵"},
+              ].map(s=>(
+                <div key={s.l} style={{background:"#fff",border:`1px solid ${C.border}`,borderRadius:14,padding:"18px 20px",boxShadow:"0 1px 4px rgba(0,0,0,0.06)"}}>
+                  <div style={{fontSize:20,marginBottom:6}}>{s.icon}</div>
+                  <div style={{fontSize:11,color:C.textDim,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:4}}>{s.l}</div>
+                  <div style={{fontSize:22,fontWeight:700,color:s.c,fontFamily:"'Sora',sans-serif"}}>{s.v}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Actions */}
+            <div style={{display:"flex",gap:10,marginBottom:16,flexWrap:"wrap"}}>
+              <button onClick={()=>{setFlujoForm({tipo:"INGRESO",fecha:new Date().toISOString().slice(0,10)});setModalFlujo(true);}}
+                style={{...btnP,padding:"9px 20px",fontSize:13,background:`linear-gradient(135deg,${C.green},#15803d)`}}>
+                + Registrar ingreso
+              </button>
+              <button onClick={()=>{setFlujoForm({tipo:"EGRESO",fecha:new Date().toISOString().slice(0,10)});setModalFlujo(true);}}
+                style={{...btnP,padding:"9px 20px",fontSize:13,background:`linear-gradient(135deg,${C.red},#b91c1c)`}}>
+                − Registrar egreso
+              </button>
+            </div>
+
+            {/* Table */}
+            {rows.length===0?(
+              <div style={{textAlign:"center",padding:"60px 0",color:C.textDim,background:"#fff",borderRadius:14,border:`1px solid ${C.border}`}}>
+                <div style={{fontSize:40,marginBottom:12}}>💵</div>
+                <div style={{fontSize:15,fontWeight:600,marginBottom:6}}>Sin movimientos aún</div>
+                <div style={{fontSize:13}}>Los pagos a proveedores y cobros a clientes aparecerán aquí automáticamente.</div>
+              </div>
+            ):(
+              <div style={{background:"#fff",border:`1px solid ${C.border}`,borderRadius:14,overflow:"hidden",boxShadow:"0 1px 4px rgba(0,0,0,0.06)"}}>
+                <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+                  <thead>
+                    <tr style={{borderBottom:`2px solid ${C.border}`,background:"#fafafa"}}>
+                      {["Fecha","Tipo","Categoría","Descripción","Monto","Saldo acumulado",""].map(h=>(
+                        <th key={h} style={{padding:"11px 14px",color:C.textDim,fontSize:10,letterSpacing:"0.07em",textTransform:"uppercase",textAlign:h==="Monto"||h==="Saldo acumulado"?"right":"left",fontWeight:600}}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {periodo!=="todo"&&saldoAnterior!==0&&(
+                      <tr style={{background:"#eff6ff",borderBottom:`1px solid ${C.border}`}}>
+                        <td colSpan={5} style={{padding:"8px 14px",fontSize:12,color:"#1d4ed8",fontWeight:600}}>📊 Saldo anterior al periodo: {fmt(saldoAnterior)}</td>
+                        <td style={{padding:"8px 14px",textAlign:"right",fontWeight:700,color:"#1d4ed8"}}>{fmt(saldoAnterior)}</td>
+                        <td/>
+                      </tr>
+                    )}
+                    {rows.map((m,i)=>(
+                      <tr key={m.id} style={{borderBottom:`1px solid ${C.border}`,background:i%2===0?"#fff":"#fafafa"}}
+                        onMouseEnter={e=>e.currentTarget.style.background="#fdf4f5"}
+                        onMouseLeave={e=>e.currentTarget.style.background=i%2===0?"#fff":"#fafafa"}>
+                        <td style={{padding:"11px 14px",color:C.textDim,whiteSpace:"nowrap"}}>{m.fecha}</td>
+                        <td style={{padding:"11px 14px"}}>
+                          <span style={{background:m.monto>0?"#dcfce7":"#fee2e2",color:m.monto>0?C.green:C.red,padding:"3px 10px",borderRadius:20,fontSize:11,fontWeight:600}}>
+                            {m.monto>0?"↑ INGRESO":"↓ EGRESO"}
+                          </span>
+                        </td>
+                        <td style={{padding:"11px 14px",color:C.textMid,fontSize:12}}>{m.categoria}</td>
+                        <td style={{padding:"11px 14px",color:C.text,maxWidth:220,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{m.descripcion}</td>
+                        <td style={{padding:"11px 14px",textAlign:"right",fontWeight:700,color:m.monto>0?C.green:C.red,whiteSpace:"nowrap"}}>{m.monto>0?"+":""}{fmt(m.monto)}</td>
+                        <td style={{padding:"11px 14px",textAlign:"right",fontWeight:700,color:m.saldoAcum>=0?C.blue:C.red,whiteSpace:"nowrap"}}>{fmt(m.saldoAcum)}</td>
+                        <td style={{padding:"8px 10px"}}>
+                          <div style={{display:"flex",gap:4}}>
+                            <button onClick={()=>{setFlujoForm({...m,monto:Math.abs(m.monto),_editId:m.id});setModalFlujo(true);}} style={{background:"#f4f4f5",border:`1px solid ${C.border}`,borderRadius:5,padding:"3px 7px",cursor:"pointer",fontSize:11,color:C.textMid}}>✏️</button>
+                            <button onClick={()=>{
+                              if(!confirm("¿Eliminar este movimiento?"))return;
+                              if(m.abonoId) setAbonosCli(p=>p.filter(a=>a.id!==m.abonoId));
+                              setFlujo(p=>p.filter(x=>x.id!==m.id));
+                            }} style={{background:"#fff0f0",border:"1px solid #fecaca",borderRadius:5,padding:"3px 7px",cursor:"pointer",fontSize:11,color:C.red}}>🗑</button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {/* Modal nuevo movimiento */}
+            {modalFlujo&&(
+              <Modal title={flujoForm._editId?"Guardar cambios":flujoForm.tipo==="INGRESO"?"Registrar ingreso":"Registrar egreso"} onClose={()=>{setModalFlujo(false);setFlujoForm({});}}>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 16px"}}>
+                  <Field label="Tipo">
+                    <select value={flujoForm.tipo||"INGRESO"} onChange={e=>setFlujoForm(f=>({...f,tipo:e.target.value,categoria:""}))} style={inp}>
+                      <option value="INGRESO">↑ Ingreso</option>
+                      <option value="EGRESO">↓ Egreso</option>
+                    </select>
+                  </Field>
+                  <Field label="Fecha">
+                    <input type="date" value={flujoForm.fecha||""} onChange={e=>setFlujoForm(f=>({...f,fecha:e.target.value}))} style={inp}/>
+                  </Field>
+                </div>
+                <Field label="Categoría">
+                  <select value={flujoForm.categoria||""} onChange={e=>setFlujoForm(f=>({...f,categoria:e.target.value}))} style={inp}>
+                    <option value="">— Seleccionar —</option>
+                    {(TIPOS_CAT[flujoForm.tipo||"INGRESO"]||[]).map(c=><option key={c}>{c}</option>)}
+                  </select>
+                </Field>
+                <Field label="Descripción">
+                  <input value={flujoForm.descripcion||""} onChange={e=>setFlujoForm(f=>({...f,descripcion:e.target.value}))} placeholder="Ej: Inyección de capital inicial" style={inp}/>
+                </Field>
+                <Field label="Monto (USD)">
+                  <input type="number" value={flujoForm.monto||""} onChange={e=>setFlujoForm(f=>({...f,monto:e.target.value}))} placeholder="0.00" style={inp}/>
+                </Field>
+                <div style={{display:"flex",gap:10,marginTop:8}}>
+                  <button onClick={()=>{setModalFlujo(false);setFlujoForm({});}} style={{flex:1,padding:"10px 0",background:"transparent",border:`1px solid ${C.border2}`,borderRadius:9,color:C.textDim,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>Cancelar</button>
+                  <button onClick={saveFlujoEntry} style={{...btnP,flex:2,padding:"10px 0",fontSize:14,background:flujoForm.tipo==="INGRESO"?`linear-gradient(135deg,${C.green},#15803d)`:`linear-gradient(135deg,${C.red},#b91c1c)`}}>
+                    {flujoForm._editId?"Guardar cambios":flujoForm.tipo==="INGRESO"?"Registrar ingreso":"Registrar egreso"}
+                  </button>
+                </div>
+              </Modal>
+            )}
+          </>
+        );
+      })()}
+
+
     </div>
   );
 }
 
 
+export default Axia;
