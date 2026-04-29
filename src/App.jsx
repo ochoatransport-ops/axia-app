@@ -1578,6 +1578,115 @@ function Axia(){
               </select>
             </div>
             <button onClick={()=>{setEditCli(null);setNewNom("");setModalCli(true);}} style={{...btnP,padding:"9px 20px",fontSize:13,flexShrink:0}}>+ Nuevo cliente</button>
+            <button onClick={async()=>{
+              const EJS=await loadExcelJS();const wb=new EJS.Workbook();
+              const fecha=new Date().toLocaleDateString("es-MX");
+              const DARK="1C1917",GREEN="16A34A",RED="DC2626",ORANGE="D97706",BLUE="2563EB",LGRAY="F5F5F4",WHITE="FFFFFF";
+              const hF=(bold=true,color=WHITE,sz=11)=>({name:"Arial",bold,color:{argb:"FF"+color},size:sz});
+              const fill=t=>({type:"pattern",pattern:"solid",fgColor:{argb:"FF"+t}});
+              const bdr=()=>({top:{style:"thin",color:{argb:"FFE7E5E4"}},left:{style:"thin",color:{argb:"FFE7E5E4"}},bottom:{style:"thin",color:{argb:"FFE7E5E4"}},right:{style:"thin",color:{argb:"FFE7E5E4"}}});
+              const thk=()=>({top:{style:"medium",color:{argb:"FF1C1917"}},left:{style:"medium",color:{argb:"FF1C1917"}},bottom:{style:"medium",color:{argb:"FF1C1917"}},right:{style:"medium",color:{argb:"FF1C1917"}}});
+              const money='"$"#,##0.00';
+
+              // Sort clientes same as current view
+              let lista=[...clientes];
+              if(cliSort==="saldo") lista.sort((a,b)=>(saldC[b.nombre]||0)-(saldC[a.nombre]||0));
+              else if(cliSort==="nombre") lista.sort((a,b)=>a.nombre.localeCompare(b.nombre));
+
+              // ══ HOJA 1: ÍNDICE ══
+              const wsIdx=wb.addWorksheet("Índice General");
+              wsIdx.columns=[{width:6},{width:32},{width:14},{width:16},{width:16},{width:16},{width:14}];
+              wsIdx.mergeCells("A1:G1");wsIdx.getCell("A1").value="REPORTE GENERAL DE CLIENTES — AXIA";
+              wsIdx.getCell("A1").font=hF(true,WHITE,14);wsIdx.getCell("A1").fill=fill(DARK);wsIdx.getCell("A1").alignment={horizontal:"center",vertical:"middle"};wsIdx.getCell("A1").border=thk();wsIdx.getRow(1).height=28;
+              wsIdx.mergeCells("A2:G2");wsIdx.getCell("A2").value=`Fecha: ${fecha} | ${lista.length} clientes`;
+              wsIdx.getCell("A2").font={name:"Arial",italic:true,color:{argb:"FF78716C"},size:10};wsIdx.getCell("A2").fill=fill(LGRAY);wsIdx.getCell("A2").alignment={horizontal:"center"};wsIdx.addRow([]);
+
+              // Global KPIs
+              const totalVendido=lista.reduce((s,c)=>s+pedidos.filter(p=>p.cliente===c.nombre&&!p.esBodega).reduce((x,p)=>x+(p.total||0),0),0);
+              const totalRecibido=lista.reduce((s,c)=>s+abonosCli.filter(a=>a.cliente===c.nombre).reduce((x,a)=>x+a.monto,0),0);
+              const totalSaldo=lista.reduce((s,c)=>s+(saldC[c.nombre]||0),0);
+              ["A4:C4","D4:E4","F4:G4"].forEach(r=>wsIdx.mergeCells(r));
+              [["A4","TOTAL VENDIDO",ORANGE],["D4","TOTAL RECIBIDO",GREEN],["F4","SALDO TOTAL",totalSaldo>0?RED:GREEN]].forEach(([c,v,col])=>{wsIdx.getCell(c).value=v;wsIdx.getCell(c).font=hF(true,WHITE,9);wsIdx.getCell(c).fill=fill(col);wsIdx.getCell(c).alignment={horizontal:"center"};wsIdx.getCell(c).border=thk();});
+              wsIdx.getRow(4).height=18;
+              ["A5:C5","D5:E5","F5:G5"].forEach(r=>wsIdx.mergeCells(r));
+              [["A5",totalVendido,ORANGE],["D5",totalRecibido,GREEN],["F5",Math.abs(totalSaldo),totalSaldo>0?RED:GREEN]].forEach(([c,v,col])=>{wsIdx.getCell(c).value=v;wsIdx.getCell(c).numFmt=money;wsIdx.getCell(c).font=hF(true,col,13);wsIdx.getCell(c).alignment={horizontal:"center"};wsIdx.getCell(c).border=bdr();});
+              wsIdx.getRow(5).height=22;wsIdx.addRow([]);
+
+              // Index table
+              const idxH=wsIdx.addRow(["#","Cliente","Pedidos","Total Vendido","Total Recibido","Saldo","Estado"]);
+              idxH.eachCell(c=>{c.font=hF(true,WHITE,9);c.fill=fill("44403C");c.alignment={horizontal:"center"};c.border=bdr();});
+              lista.forEach((cli,i)=>{
+                const tV=pedidos.filter(p=>p.cliente===cli.nombre&&!p.esBodega).reduce((s,p)=>s+(p.total||0),0);
+                const tA=abonosCli.filter(a=>a.cliente===cli.nombre).reduce((s,a)=>s+a.monto,0);
+                const saldo=saldC[cli.nombre]||0;
+                const r=wsIdx.addRow([i+1,cli.nombre,pedidos.filter(p=>p.cliente===cli.nombre&&!p.esBodega).length,tV,tA,Math.abs(saldo),saldo>0?"Por cobrar":"Al corriente"]);
+                [4,5,6].forEach(j=>r.getCell(j).numFmt=money);
+                r.getCell(7).font={name:"Arial",bold:true,color:{argb:saldo>0?"FFDC2626":"FF16A34A"},size:9};r.getCell(7).alignment={horizontal:"center"};
+                if(saldo>0)r.eachCell(c=>{c.fill=fill("FFFBEB");c.border=bdr();});
+                else r.eachCell(c=>{c.fill=fill("F0FDF4");c.border=bdr();});
+              });
+
+              // ══ HOJA 2: DESGLOSE POR CLIENTE ══
+              const wsD=wb.addWorksheet("Desglose por Cliente");
+              wsD.columns=[{width:6},{width:32},{width:22},{width:12},{width:14},{width:14},{width:14},{width:22}];
+              wsD.mergeCells("A1:H1");wsD.getCell("A1").value="DESGLOSE DETALLADO POR CLIENTE";
+              wsD.getCell("A1").font=hF(true,WHITE,13);wsD.getCell("A1").fill=fill(DARK);wsD.getCell("A1").alignment={horizontal:"center"};wsD.getRow(1).height=26;
+              wsD.mergeCells("A2:H2");wsD.getCell("A2").value=`Fecha: ${fecha}`;
+              wsD.getCell("A2").font={name:"Arial",italic:true,color:{argb:"FF78716C"},size:10};wsD.getCell("A2").fill=fill(LGRAY);wsD.getCell("A2").alignment={horizontal:"center"};
+
+              lista.forEach((cli,idx)=>{
+                wsD.addRow([]);
+                const pc=pedidos.filter(p=>p.cliente===cli.nombre&&!p.esBodega);
+                const tV=pc.reduce((s,p)=>s+(p.total||0),0);
+                const tA=abonosCli.filter(a=>a.cliente===cli.nombre).reduce((s,a)=>s+a.monto,0);
+                const saldo=saldC[cli.nombre]||0;
+                const pend=pc.filter(p=>p.clientePago!=="PAGADO"&&p.clientePago!=="PAGADO TRANSFERENCIA");
+                const pag=pc.filter(p=>p.clientePago==="PAGADO"||p.clientePago==="PAGADO TRANSFERENCIA");
+
+                // Client header
+                const cr=wsD.rowCount+1;
+                wsD.addRow([`${idx+1}.`,cli.nombre,"","Total vendido","Total recibido","Saldo","",""]);
+                wsD.mergeCells(`B${cr}:C${cr}`);
+                wsD.getRow(cr).eachCell(c=>{c.font=hF(true,WHITE,10);c.fill=fill("44403C");c.border=bdr();});wsD.getRow(cr).height=18;
+                const vr=wsD.addRow(["","","",tV,tA,Math.abs(saldo),"",saldo>0?"⚠ Por cobrar":"✓ Al corriente"]);
+                [4,5,6].forEach(i=>vr.getCell(i).numFmt=money);
+                vr.getCell(4).font=hF(true,ORANGE,11);vr.getCell(5).font=hF(true,GREEN,11);
+                vr.getCell(6).font=hF(true,saldo>0?RED:GREEN,11);vr.getCell(8).font={name:"Arial",bold:true,color:{argb:saldo>0?"FFDC2626":"FF16A34A"},size:10};
+                vr.eachCell(c=>{c.fill=fill(saldo>0?"FFFBEB":"F0FDF4");c.alignment={horizontal:"center"};c.border=bdr();});
+
+                if(pc.length>0){
+                  wsD.addRow([]);
+                  const ph=wsD.addRow(["","Folio","Mercancía","Cant.","Precio","Total","Abonado","Estado"]);
+                  ph.eachCell(c=>{c.font=hF(true,WHITE,9);c.fill=fill(BLUE);c.alignment={horizontal:"center"};c.border=bdr();});
+                  pc.sort((a,b)=>(b.fecha||"").localeCompare(a.fecha||"")).forEach(p=>{
+                    const isPag=p.clientePago==="PAGADO"||p.clientePago==="PAGADO TRANSFERENCIA";
+                    const asig=p.montoAsignado||0;
+                    const r=wsD.addRow(["","#"+p.id,p.mercancia,p.cant,p.precioPublico||0,p.total||0,asig,p.clientePago||"Pendiente"]);
+                    [5,6,7].forEach(i=>r.getCell(i).numFmt=money);
+                    r.getCell(8).font={name:"Arial",bold:true,color:{argb:isPag?"FF16A34A":"FFDC2626"},size:9};r.getCell(8).alignment={horizontal:"center"};
+                    r.eachCell(c=>{c.fill=fill(isPag?"F0FDF4":WHITE);c.border=bdr();});
+                  });
+                  const sub=wsD.addRow(["","TOTAL","",pc.reduce((s,p)=>s+p.cant,0),"",tV,tA,""]);
+                  [6,7].forEach(i=>sub.getCell(i).numFmt=money);
+                  sub.eachCell(c=>{c.font=hF(true,DARK,9);c.fill=fill(LGRAY);c.border=bdr();});
+                }
+
+                if(abonosCli.filter(a=>a.cliente===cli.nombre).length>0){
+                  wsD.addRow([]);
+                  const ah=wsD.addRow(["","Fecha pago","Nota","Monto","","","",""]);
+                  ah.eachCell(c=>{c.font=hF(true,WHITE,9);c.fill=fill(GREEN);c.alignment={horizontal:"center"};c.border=bdr();});
+                  abonosCli.filter(a=>a.cliente===cli.nombre).sort((a,b)=>b.fecha.localeCompare(a.fecha)).forEach(a=>{
+                    const r=wsD.addRow(["",a.fecha,a.nota||"—",a.monto,"","","",""]);
+                    r.getCell(4).numFmt=money;r.getCell(4).font=hF(true,GREEN,10);r.eachCell(c=>{c.fill=fill("F0FDF4");c.border=bdr();});
+                  });
+                }
+              });
+
+              const buf=await wb.xlsx.writeBuffer();
+              const blob=new Blob([buf],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
+              const a=document.createElement("a");a.href=URL.createObjectURL(blob);
+              a.download=`Clientes_AXIA_${new Date().toISOString().slice(0,10)}.xlsx`;a.click();
+            }} style={{padding:"9px 18px",background:"#16a34a",border:"none",borderRadius:10,color:"#fff",fontSize:13,cursor:"pointer",fontWeight:600,fontFamily:"'Outfit',sans-serif",flexShrink:0}}>📊 Excel Clientes</button>
           </div>
 
           {/* Cards */}
@@ -1828,6 +1937,123 @@ function Axia(){
               </select>
             </div>
             <button onClick={()=>{setBForm({fecha:new Date().toISOString().slice(0,10),proveedor:""});setModalBodega("new");}} style={{...btnP,padding:"9px 20px",fontSize:13,flexShrink:0}}>+ Nueva entrada</button>
+            <button onClick={async()=>{
+              const EJS=await loadExcelJS();
+              const wb=new EJS.Workbook();
+              const fecha=new Date().toLocaleDateString("es-MX");
+              const DARK="1C1917",GREEN="16A34A",RED="DC2626",ORANGE="D97706",BLUE="2563EB",LGRAY="F5F5F4",WHITE="FFFFFF",YELLOW="FEF3C7";
+              const hF=(bold=true,color=WHITE,sz=11)=>({name:"Arial",bold,color:{argb:"FF"+color},size:sz});
+              const fill=t=>({type:"pattern",pattern:"solid",fgColor:{argb:"FF"+t}});
+              const bdr=()=>({top:{style:"thin",color:{argb:"FFE7E5E4"}},left:{style:"thin",color:{argb:"FFE7E5E4"}},bottom:{style:"thin",color:{argb:"FFE7E5E4"}},right:{style:"thin",color:{argb:"FFE7E5E4"}}});
+              const thk=()=>({top:{style:"medium",color:{argb:"FF1C1917"}},left:{style:"medium",color:{argb:"FF1C1917"}},bottom:{style:"medium",color:{argb:"FF1C1917"}},right:{style:"medium",color:{argb:"FF1C1917"}}});
+              const money='"$"#,##0.00';
+
+              const bodegaFilt=[...bodega].filter(item=>{
+                const dsp=disponibleDe(item);
+                return(bFiltProv==="Todos"||item.proveedor===bFiltProv)
+                  &&(bFiltDist==="Todos"||(bFiltDist==="Pendiente"&&dsp>0)||(bFiltDist==="Completo"&&dsp===0));
+              }).sort((a,b)=>(b.fecha||"0").localeCompare(a.fecha||"0"));
+
+              // ══ HOJA 1: ÍNDICE ══
+              const wsIdx=wb.addWorksheet("Índice");
+              wsIdx.columns=[{width:6},{width:35},{width:20},{width:14},{width:14},{width:14},{width:14},{width:16}];
+              wsIdx.mergeCells("A1:H1");
+              const t=wsIdx.getCell("A1");t.value="INVENTARIO BODEGA — AXIA Distribution & Supply";
+              t.font=hF(true,WHITE,14);t.fill=fill(DARK);t.alignment={horizontal:"center",vertical:"middle"};t.border=thk();wsIdx.getRow(1).height=28;
+              wsIdx.mergeCells("A2:H2");wsIdx.getCell("A2").value=`Fecha: ${fecha} | ${bodegaFilt.length} entradas`;
+              wsIdx.getCell("A2").font={name:"Arial",italic:true,color:{argb:"FF78716C"},size:10};wsIdx.getCell("A2").fill=fill(LGRAY);wsIdx.getCell("A2").alignment={horizontal:"center"};
+              wsIdx.addRow([]);
+
+              // KPIs
+              const totalInv=bodegaFilt.reduce((s,b)=>s+(b.costoTotal||0),0);
+              const totalDisp=bodegaFilt.reduce((s,b)=>s+disponibleDe(b),0);
+              const totalDist=bodegaFilt.reduce((s,b)=>s+(b.distribuciones||[]).reduce((x,d)=>x+d.cant,0),0);
+              ["A4:B4","C4:D4","E4:F4","G4:H4"].forEach(r=>wsIdx.mergeCells(r));
+              [["A4","COSTO TOTAL INVENTARIO",ORANGE],["C4","TOTAL DISTRIBUIDO",GREEN],["E4","TOTAL DISPONIBLE",BLUE],["G4","ENTRADAS",DARK]].forEach(([c,v,col])=>{
+                wsIdx.getCell(c).value=v;wsIdx.getCell(c).font=hF(true,WHITE,9);wsIdx.getCell(c).fill=fill(col);wsIdx.getCell(c).alignment={horizontal:"center"};wsIdx.getCell(c).border=thk();
+              });
+              wsIdx.getRow(4).height=18;
+              ["A5:B5","C5:D5","E5:F5","G5:H5"].forEach(r=>wsIdx.mergeCells(r));
+              [[`A5`,totalInv,ORANGE],[`C5`,totalDist,GREEN],[`E5`,totalDisp,BLUE],[`G5`,bodegaFilt.length,DARK]].forEach(([c,v,col])=>{
+                wsIdx.getCell(c).value=v;wsIdx.getCell(c).font=hF(true,col,13);wsIdx.getCell(c).alignment={horizontal:"center"};wsIdx.getCell(c).border=bdr();
+                if(typeof v==="number"&&c!=="G5")wsIdx.getCell(c).numFmt=money;
+              });
+              wsIdx.getRow(5).height=22;wsIdx.addRow([]);
+
+              // Table
+              const idxHdr=wsIdx.addRow(["#","Mercancía","Proveedor","Fecha","Costo/u","Comprado","Distribuido","Disponible"]);
+              idxHdr.eachCell(c=>{c.font=hF(true,WHITE,9);c.fill=fill("44403C");c.alignment={horizontal:"center"};c.border=bdr();});wsIdx.getRow(idxHdr.number).height=18;
+              bodegaFilt.forEach((item,i)=>{
+                const td=(item.distribuciones||[]).reduce((s,d)=>s+d.cant,0);
+                const dsp=disponibleDe(item);
+                const r=wsIdx.addRow([i+1,item.mercancia,item.proveedor,item.fecha,item.unitario,item.cant,td,dsp]);
+                r.getCell(1).alignment={horizontal:"center"};r.getCell(4).alignment={horizontal:"center"};
+                r.getCell(5).numFmt=money;
+                r.getCell(8).font={name:"Arial",bold:dsp>0,color:{argb:dsp>0?"FFD97706":"FF16A34A"},size:10};
+                if(dsp>0)r.eachCell(c=>{c.fill=fill("FFFBEB");c.border=bdr();});
+                else r.eachCell(c=>{c.fill=fill(WHITE);c.border=bdr();});
+              });
+
+              // ══ HOJA 2: DESGLOSE POR ITEM ══
+              const wsD=wb.addWorksheet("Desglose por Item");
+              wsD.columns=[{width:6},{width:32},{width:22},{width:12},{width:14},{width:14},{width:14},{width:16}];
+              wsD.mergeCells("A1:H1");wsD.getCell("A1").value="DESGLOSE COMPLETO DE BODEGA";
+              wsD.getCell("A1").font=hF(true,WHITE,13);wsD.getCell("A1").fill=fill(DARK);wsD.getCell("A1").alignment={horizontal:"center"};wsD.getRow(1).height=26;
+              wsD.mergeCells("A2:H2");wsD.getCell("A2").value=`Fecha: ${fecha}`;
+              wsD.getCell("A2").font={name:"Arial",italic:true,color:{argb:"FF78716C"},size:10};wsD.getCell("A2").fill=fill(LGRAY);wsD.getCell("A2").alignment={horizontal:"center"};
+
+              bodegaFilt.forEach((item,idx)=>{
+                wsD.addRow([]);
+                const td=(item.distribuciones||[]).reduce((s,d)=>s+d.cant,0);
+                const tm=(item.mermas||[]).reduce((s,m)=>s+m.cant,0);
+                const dsp=disponibleDe(item);
+                const pct=item.cant>0?Math.round((td/item.cant)*100):0;
+
+                // Item header
+                const ir=wsD.rowCount+1;
+                wsD.addRow([`${idx+1}.`,item.mercancia,item.proveedor,item.fecha,`$${item.unitario}/u`,`${pct}% dist.`,"",""]);
+                wsD.mergeCells(`B${ir}:C${ir}`);
+                wsD.getRow(ir).eachCell(c=>{c.font=hF(true,WHITE,10);c.fill=fill("44403C");c.border=bdr();});
+                wsD.getRow(ir).height=18;
+
+                // Stats
+                const sr=wsD.addRow(["","Comprado","Distribuido","Merma","Disponible","Costo total","",""]);
+                wsD.getRow(sr.number).eachCell((c,i)=>{c.font=hF(false,"78716C",9);c.fill=fill(LGRAY);c.border=bdr();c.alignment={horizontal:"center"};});
+                const vr=wsD.addRow(["",item.cant,td,tm,dsp,item.costoTotal||item.cant*item.unitario,"",""]);
+                vr.getCell(2).font=hF(true,DARK,11);vr.getCell(3).font=hF(true,GREEN,11);
+                vr.getCell(4).font=hF(true,ORANGE,11);vr.getCell(5).font=hF(true,dsp>0?ORANGE:GREEN,11);
+                vr.getCell(6).numFmt=money;vr.getCell(6).font=hF(true,DARK,10);
+                vr.eachCell(c=>{c.alignment={horizontal:"center"};c.fill=fill(dsp>0?"FFFBEB":"F0FDF4");c.border=bdr();});
+
+                // Distribuciones
+                if((item.distribuciones||[]).length>0){
+                  wsD.addRow([]);
+                  const dh=wsD.addRow(["","Cliente","Cantidad","Fecha","P. Venta","Total venta","Abonado","Estado"]);
+                  dh.eachCell(c=>{c.font=hF(true,WHITE,9);c.fill=fill(BLUE);c.alignment={horizontal:"center"};c.border=bdr();});
+                  (item.distribuciones||[]).forEach(d=>{
+                    const ped=pedidos.find(p=>p.id===d.pedidoId);
+                    const isPag=ped?.clientePago==="PAGADO"||ped?.clientePago==="PAGADO TRANSFERENCIA";
+                    const asig=ped?.montoAsignado||0;
+                    const r=wsD.addRow(["",d.cliente,d.cant,d.fecha,ped?.precioPublico||0,d.total||0,asig,ped?.clientePago||"Pendiente"]);
+                    [5,6,7].forEach(i=>r.getCell(i).numFmt=money);
+                    r.getCell(8).font={name:"Arial",bold:true,color:{argb:isPag?"FF16A34A":"FFDC2626"},size:9};
+                    r.getCell(8).alignment={horizontal:"center"};
+                    r.eachCell(c=>{c.fill=fill(isPag?"F0FDF4":WHITE);c.border=bdr();});
+                  });
+                  const sub=wsD.addRow(["","SUBTOTAL",(item.distribuciones||[]).reduce((s,d)=>s+d.cant,0),"","",(item.distribuciones||[]).reduce((s,d)=>s+(d.total||0),0),"",""]);
+                  sub.getCell(6).numFmt=money;sub.eachCell(c=>{c.font=hF(true,DARK,9);c.fill=fill(LGRAY);c.border=bdr();});
+                }
+                if(dsp>0){
+                  const dr=wsD.addRow(["","⚠ SIN VENDER",dsp,"","","","",""]);
+                  dr.eachCell(c=>{c.font=hF(true,ORANGE,10);c.fill=fill(YELLOW);c.border=bdr();});
+                }
+              });
+
+              const buf=await wb.xlsx.writeBuffer();
+              const blob=new Blob([buf],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
+              const a=document.createElement("a");a.href=URL.createObjectURL(blob);
+              a.download=`Bodega_AXIA_${new Date().toISOString().slice(0,10)}.xlsx`;a.click();
+            }} style={{padding:"9px 18px",background:"#16a34a",border:"none",borderRadius:10,color:"#fff",fontSize:13,cursor:"pointer",fontWeight:600,fontFamily:"'Outfit',sans-serif",flexShrink:0}}>📊 Excel Bodega</button>
           </div>
 
           {/* Cards */}
@@ -1945,6 +2171,52 @@ function Axia(){
                         {/* Acciones */}
                         <div style={{padding:"14px 24px",borderTop:"1px solid #f5f5f4",display:"flex",gap:10,flexWrap:"wrap"}}>
                           <button onClick={e=>{e.stopPropagation();setBForm({fecha:item.fecha,proveedor:item.proveedor,mercancia:item.mercancia,cant:item.cant,unitario:item.unitario,notas:item.notas||"",_editId:item.id});setModalBodega("edit");}} style={{padding:"9px 18px",background:"#f5f5f4",border:"1px solid #e7e5e4",borderRadius:10,color:"#44403c",fontSize:13,cursor:"pointer",fontFamily:"'Outfit',sans-serif"}}>✏️ Editar</button>
+                        <button onClick={async e=>{e.stopPropagation();
+                          const EJS=await loadExcelJS();const wb=new EJS.Workbook();
+                          const fecha=new Date().toLocaleDateString("es-MX");
+                          const DARK="1C1917",GREEN="16A34A",RED="DC2626",ORANGE="D97706",BLUE="2563EB",LGRAY="F5F5F4",WHITE="FFFFFF";
+                          const hF=(bold=true,color=WHITE,sz=11)=>({name:"Arial",bold,color:{argb:"FF"+color},size:sz});
+                          const fill=t=>({type:"pattern",pattern:"solid",fgColor:{argb:"FF"+t}});
+                          const bdr=()=>({top:{style:"thin",color:{argb:"FFE7E5E4"}},left:{style:"thin",color:{argb:"FFE7E5E4"}},bottom:{style:"thin",color:{argb:"FFE7E5E4"}},right:{style:"thin",color:{argb:"FFE7E5E4"}}});
+                          const thk=()=>({top:{style:"medium",color:{argb:"FF1C1917"}},left:{style:"medium",color:{argb:"FF1C1917"}},bottom:{style:"medium",color:{argb:"FF1C1917"}},right:{style:"medium",color:{argb:"FF1C1917"}}});
+                          const money='"$"#,##0.00';
+                          const td=(item.distribuciones||[]).reduce((s,d)=>s+d.cant,0);
+                          const tm=(item.mermas||[]).reduce((s,m)=>s+m.cant,0);
+                          const dspVal=disponibleDe(item);
+                          const ws=wb.addWorksheet("Estado de Pedido");
+                          ws.columns=[{width:20},{width:30},{width:14},{width:14},{width:14},{width:14}];
+                          ws.mergeCells("A1:F1");ws.getCell("A1").value=item.mercancia.toUpperCase();
+                          ws.getCell("A1").font=hF(true,WHITE,13);ws.getCell("A1").fill=fill(DARK);ws.getCell("A1").alignment={horizontal:"center"};ws.getRow(1).height=26;
+                          ws.mergeCells("A2:F2");ws.getCell("A2").value=`Proveedor: ${item.proveedor} | Fecha: ${item.fecha} | ${fecha}`;
+                          ws.getCell("A2").font={name:"Arial",italic:true,color:{argb:"FF78716C"},size:10};ws.getCell("A2").fill=fill(LGRAY);ws.getCell("A2").alignment={horizontal:"center"};ws.addRow([]);
+                          ["A4:B4","C4:D4","E4:F4"].forEach(r=>ws.mergeCells(r));
+                          [["A4","COMPRADO",DARK],["C4","DISTRIBUIDO",GREEN],["E4","DISPONIBLE",dspVal>0?ORANGE:GREEN]].forEach(([c,v,col])=>{ws.getCell(c).value=v;ws.getCell(c).font=hF(true,WHITE,9);ws.getCell(c).fill=fill(col);ws.getCell(c).alignment={horizontal:"center"};ws.getCell(c).border=thk();});
+                          ws.getRow(4).height=18;
+                          ["A5:B5","C5:D5","E5:F5"].forEach(r=>ws.mergeCells(r));
+                          [["A5",item.cant,DARK],["C5",td,GREEN],["E5",dspVal,dspVal>0?ORANGE:GREEN]].forEach(([c,v,col])=>{ws.getCell(c).value=v;ws.getCell(c).font=hF(true,col,14);ws.getCell(c).alignment={horizontal:"center"};ws.getCell(c).border=bdr();});
+                          ws.getRow(5).height=22;ws.addRow([]);
+                          ws.addRow(["Costo unitario",item.unitario,"Costo total",item.costoTotal||item.cant*item.unitario,"",""]);
+                          ws.getCell("B7").numFmt=money;ws.getCell("D7").numFmt=money;ws.getRow(7).eachCell(c=>{c.fill=fill(LGRAY);c.border=bdr();});ws.addRow([]);
+                          if((item.distribuciones||[]).length>0){
+                            const dh=ws.addRow(["Cliente","Cantidad","Fecha","Precio venta","Total","Estado"]);
+                            dh.eachCell(c=>{c.font=hF(true,WHITE,9);c.fill=fill(BLUE);c.alignment={horizontal:"center"};c.border=bdr();});
+                            (item.distribuciones||[]).forEach(d=>{
+                              const ped=pedidos.find(p=>p.id===d.pedidoId);
+                              const isPag=ped?.clientePago==="PAGADO"||ped?.clientePago==="PAGADO TRANSFERENCIA";
+                              const r=ws.addRow([d.cliente,d.cant,d.fecha,ped?.precioPublico||0,d.total||0,ped?.clientePago||"Pendiente"]);
+                              [4,5].forEach(i=>r.getCell(i).numFmt=money);
+                              r.getCell(6).font={name:"Arial",bold:true,color:{argb:isPag?"FF16A34A":"FFDC2626"},size:9};r.getCell(6).alignment={horizontal:"center"};
+                              r.eachCell(c=>{c.fill=fill(isPag?"F0FDF4":WHITE);c.border=bdr();});
+                            });
+                            const sub=ws.addRow(["TOTAL",(item.distribuciones||[]).reduce((s,d)=>s+d.cant,0),"","",(item.distribuciones||[]).reduce((s,d)=>s+(d.total||0),0),""]);
+                            sub.getCell(5).numFmt=money;sub.eachCell(c=>{c.font=hF(true,DARK,9);c.fill=fill(LGRAY);c.border=bdr();});
+                          }
+                          if(dspVal>0){ws.addRow([]);const dr=ws.addRow(["⚠ SIN VENDER / DISPONIBLE",dspVal,"","","",""]);dr.eachCell(c=>{c.font=hF(true,ORANGE,10);c.fill=fill("FFFBEB");c.border=thk();});}
+                          const buf=await wb.xlsx.writeBuffer();
+                          const blob=new Blob([buf],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
+                          const a=document.createElement("a");a.href=URL.createObjectURL(blob);
+                          a.download=`Bodega_${item.mercancia.replace(/\s+/g,"_").slice(0,30)}_${new Date().toISOString().slice(0,10)}.xlsx`;a.click();
+                        }} style={{padding:"9px 18px",background:"#16a34a",border:"none",borderRadius:10,color:"#fff",fontSize:13,cursor:"pointer",fontFamily:"'Outfit',sans-serif"}}>📊 Excel</button>
                           {dsp>0&&<button onClick={e=>{e.stopPropagation();setModalDist(item.id);setDForm({fecha:new Date().toISOString().slice(0,10),cliente:clientes[0]?.nombre||""});}} style={{padding:"9px 18px",background:"#1c1917",border:"none",borderRadius:10,color:"#fff",fontSize:13,cursor:"pointer",fontWeight:600,fontFamily:"'Outfit',sans-serif"}}>📦 Distribuir ({dsp} disponibles)</button>}
                           <button onClick={e=>{e.stopPropagation();setModalMerma({bodegaId:item.id,id:null,cant:"",tipo:"",nota:""});}} style={{padding:"9px 18px",background:"#fff7ed",border:"1px solid #fed7aa",borderRadius:10,color:"#92400e",fontSize:13,cursor:"pointer",fontFamily:"'Outfit',sans-serif"}}>+ Merma</button>
                           <button onClick={e=>{e.stopPropagation();if(!confirm("¿Eliminar?"))return;setBodega(p=>p.filter(b=>b.id!==item.id));setPedidos(p=>p.filter(x=>x.id!==item.pedidoProvId&&!(item.distribuciones||[]).find(d=>d.pedidoId===x.id)));}} style={{padding:"9px 18px",background:"#fff1f2",border:"1px solid #fecdd3",borderRadius:10,color:"#e11d48",fontSize:13,cursor:"pointer",fontFamily:"'Outfit',sans-serif"}}>🗑</button>
